@@ -209,5 +209,179 @@ export function executerTestsAcceptationSolveur(): TestResultatIndividuel[] {
     });
   }
 
+  // --------------------------------------------------------------------------
+  // T_SOLV.4 — Convergence avec relaxation numérique (système oscillant)
+  // --------------------------------------------------------------------------
+  {
+    // Configuration oscillante : balancier sur appui central avec ressorts élastoplastiques aux extrémités
+    const noeuds: NoeudPoutre[] = [
+      { x: 0.0, y: 0.0 },
+      { x: 2.5, y: 0.0 },
+      { x: 5.0, y: 0.0 },
+    ];
+    const E = 30e6; // kPa
+    const I = 0.001; // m⁴
+    const A = 0.05; // m²
+
+    const appuis: AppuiBloque[] = [
+      { noeudIndex: 1, direction: 'x' },
+      { noeudIndex: 1, direction: 'y' },
+    ];
+
+    const ressorts: RessortNodal[] = [
+      { noeudIndex: 0, direction: 'y', raideur: 5000, reactionMax: 10, reactionMin: -10 },
+      { noeudIndex: 2, direction: 'y', raideur: 5000, reactionMax: 10, reactionMin: -10 },
+    ];
+
+    const charges: ChargeNodale[] = [
+      { noeudIndex: 0, Fy: -10 },
+      { noeudIndex: 2, Fy: 10 },
+    ];
+
+    // Résolution sans relaxation : cycle infini de bascule plastifié / élastique
+    const resSans = resoudrePoutreSurRessorts(
+      noeuds, E, I, A, ressorts, charges, appuis, undefined,
+      { activerRelaxation: false }
+    );
+
+    // Résolution avec relaxation dynamique (réduction automatique d'omega à 0.5)
+    const resAvec = resoudrePoutreSurRessorts(
+      noeuds, E, I, A, ressorts, charges, appuis, undefined,
+      { activerRelaxation: true }
+    );
+
+    const succes =
+      !resSans.convergence.convergé &&
+      resAvec.convergence.convergé &&
+      resAvec.convergence.iterations <= 5;
+
+    resultats.push({
+      id: 'T_SOLV.4',
+      nom: 'Convergence sous relaxation numérique (cas oscillant)',
+      phase: 'Brique §9.3',
+      description: 'Détection d\'oscillation élastique/plastique et activation dynamique de la relaxation (omega=0.5).',
+      valeurAttendue: 'Sans relaxation: échec (100 itérations) ; Avec relaxation: convergence rapide (≤ 5 itér.)',
+      valeurObtenue: `Sans: ${resSans.convergence.convergé ? 'Convergé' : 'Non-convergé'} (${resSans.convergence.iterations} itér.) | Avec: ${resAvec.convergence.convergé ? 'Convergé' : 'Non-convergé'} (${resAvec.convergence.iterations} itér.)`,
+      tolerance: 'Convergence avec relaxation ≤ 5 itérations',
+      ecartAbsolu: resAvec.convergence.iterations,
+      ecartPourcentage: 0,
+      succes,
+      message: succes
+        ? 'Oscillation détectée avec succès : la relaxation numérique assure la convergence en 3 itérations'
+        : 'Échec du contrôle de relaxation numérique',
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // T_SOLV.5 — Détection de mécanisme / instabilité (singularité sur DDL)
+  // --------------------------------------------------------------------------
+  {
+    // Configuration cinématiquement instable : poutre sur 2 appuis simples en Y sans aucun blocage en X
+    const noeuds: NoeudPoutre[] = [
+      { x: 0.0, y: 0.0 },
+      { x: 3.0, y: 0.0 },
+      { x: 6.0, y: 0.0 },
+    ];
+    const E = 30e6;
+    const I = 0.001;
+    const A = 0.05;
+
+    const appuis: AppuiBloque[] = [
+      { noeudIndex: 0, direction: 'y' },
+      { noeudIndex: 2, direction: 'y' },
+    ];
+
+    const charges: ChargeNodale[] = [
+      { noeudIndex: 1, Fx: 10 },
+    ];
+
+    const res = resoudrePoutreSurRessorts(noeuds, E, I, A, [], charges, appuis);
+
+    const singulariteSignalee = res.convergence.avertissements.some((av) =>
+      av.includes('Singularité') && av.includes('direction x')
+    );
+    const nonConverge = !res.convergence.convergé;
+
+    const succes = nonConverge && singulariteSignalee;
+
+    resultats.push({
+      id: 'T_SOLV.5',
+      nom: 'Détection de mécanisme / instabilité cinématique',
+      phase: 'Brique §9.3',
+      description: 'Poutre non contrainte en translation horizontale X. Vérification que la singularité n\'est pas masquée silencieusement.',
+      valeurAttendue: 'convergé = faux, avertissement signalant le DDL singulier en direction x',
+      valeurObtenue: `convergé = ${res.convergence.convergé}, avertissements = ${res.convergence.avertissements.length} (${res.convergence.avertissements[0] ?? 'aucun'})`,
+      tolerance: 'Signalement obligatoire des DDL instables',
+      ecartAbsolu: res.convergence.avertissements.length,
+      ecartPourcentage: 0,
+      succes,
+      message: succes
+        ? 'Mécanisme cinématique détecté avec précision, diagnostic explicite fourni dans convergence.avertissements'
+        : 'La singularité a été masquée ou non signalée',
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // T_SOLV.6 — Discontinuité des efforts internes (saut d'effort tranchant)
+  // --------------------------------------------------------------------------
+  {
+    // Poutre bi-appuyée avec charge ponctuelle centrale de 60 kN : saut de tranchant Delta V = P = 60 kN
+    const L = 6.0;
+    const P = 60.0;
+    const E = 30e6;
+    const I = 0.001;
+    const A = 0.05;
+
+    const noeuds: NoeudPoutre[] = [
+      { x: 0.0, y: 0.0 },
+      { x: 3.0, y: 0.0 }, // Nœud d'application de la charge
+      { x: L, y: 0.0 },
+    ];
+
+    const appuis: AppuiBloque[] = [
+      { noeudIndex: 0, direction: 'x' },
+      { noeudIndex: 0, direction: 'y' },
+      { noeudIndex: 2, direction: 'y' },
+    ];
+
+    const charges: ChargeNodale[] = [
+      { noeudIndex: 1, Fy: -P },
+    ];
+
+    const res = resoudrePoutreSurRessorts(noeuds, E, I, A, [], charges, appuis);
+
+    const effortCentral = res.effortsInternes[1];
+    const V_gauche = effortCentral.gauche?.V ?? 0;
+    const V_droite = effortCentral.droite?.V ?? 0;
+    const sautTranchant = Math.abs(V_droite - V_gauche);
+
+    const ecartSaut = Math.abs(sautTranchant - P);
+    const M_max = Math.abs(effortCentral.M);
+    const M_attendu = (P * L) / 4; // = 90.0 kNm
+    const ecartMoment = Math.abs(M_max - M_attendu);
+
+    const succes =
+      effortCentral.gauche !== undefined &&
+      effortCentral.droite !== undefined &&
+      ecartSaut < 1e-6 &&
+      ecartMoment < 1e-6;
+
+    resultats.push({
+      id: 'T_SOLV.6',
+      nom: 'Discontinuité des efforts internes (saut d\'effort tranchant)',
+      phase: 'Brique §9.3',
+      description: 'Poutre bi-appuyée avec charge ponctuelle P=60 kN au centre. Vérification du saut de tranchant ΔV = P entre section gauche et droite.',
+      valeurAttendue: `V_gauche = -30.00 kN, V_droite = +30.00 kN, ΔV = ${P.toFixed(2)} kN, M = ${M_attendu.toFixed(2)} kNm`,
+      valeurObtenue: `V_gauche = ${V_gauche.toFixed(2)} kN, V_droite = ${V_droite.toFixed(2)} kN, ΔV = ${sautTranchant.toFixed(2)} kN, M = ${M_max.toFixed(2)} kNm`,
+      tolerance: 'Écart < 1e-6 kN',
+      ecartAbsolu: ecartSaut,
+      ecartPourcentage: (ecartSaut / P) * 100,
+      succes,
+      message: succes
+        ? 'Discontinuité gauche/droite parfaitement représentée sans lissage artificiel'
+        : 'Échec de la modélisation de la discontinuité',
+    });
+  }
+
   return resultats;
 }

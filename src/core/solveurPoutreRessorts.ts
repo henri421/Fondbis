@@ -46,6 +46,28 @@ export interface EtatInitialSolveur {
   }>;
 }
 
+export interface EffortSection {
+  N: number; // effort normal [kN] (+ = traction, - = compression)
+  V: number; // effort tranchant [kN]
+  M: number; // moment fléchissant [kN.m]
+}
+
+export interface EffortNodal {
+  noeudIndex: number;
+  N: number; // effort normal représentatif [kN] (+ = traction, - = compression)
+  V: number; // effort tranchant représentatif [kN]
+  M: number; // moment fléchissant représentatif [kN.m]
+  gauche?: EffortSection; // section immédiatement à gauche (x⁻, élément incident amont)
+  droite?: EffortSection; // section immédiatement à droite (x⁺, élément incident aval)
+}
+
+export interface OptionsSolveurPoutre {
+  maxIterations?: number;
+  toleranceConvergence?: number;
+  activerRelaxation?: boolean; // par défaut true (réduction automatique d'omega en cas d'oscillation)
+  omegaRelaxation?: number;    // par défaut 0.5
+}
+
 export interface ResultatSolveurPoutre {
   deplacements: Array<{
     noeudIndex: number;
@@ -65,16 +87,12 @@ export interface ResultatSolveurPoutre {
     direction: 'x' | 'y' | 'rotation';
     reaction: number; // réaction de blocage rigide [kN ou kN.m]
   }>;
-  effortsInternes: Array<{
-    noeudIndex: number;
-    N: number; // effort normal [kN] (+ = traction, - = compression)
-    V: number; // effort tranchant [kN]
-    M: number; // moment fléchissant [kN.m]
-  }>;
+  effortsInternes: EffortNodal[];
   convergence: {
     convergé: boolean;
     iterations: number;
     residuFinal: number;
+    avertissements: string[];
     message?: string;
   };
   equilibreGlobal: {
@@ -86,14 +104,21 @@ export interface ResultatSolveurPoutre {
   statutNormatif: string;
 }
 
+interface ResultatSystemeLineaire {
+  solution: number[];
+  ddlSinguliers: number[];
+}
+
 /**
  * Résout le système linéaire K * U = F par élimination de Gauss avec pivot partiel
+ * Détecte les pivots quasi-nuls (< 1e-13) pour remonter les singularités / mécanismes
  */
-function resoudreSystemeLineaire(A: number[][], b: number[]): number[] {
+function resoudreSystemeLineaire(A: number[][], b: number[]): ResultatSystemeLineaire {
   const n = b.length;
   // Copie de travail
   const M: number[][] = A.map((row) => [...row]);
   const x: number[] = [...b];
+  const ddlSinguliers: number[] = [];
 
   for (let p = 0; p < n; p++) {
     // Recherche du pivot maximal
@@ -107,7 +132,8 @@ function resoudreSystemeLineaire(A: number[][], b: number[]): number[] {
     }
 
     if (maxVal < 1e-13) {
-      // Système singulier ou quasi-singulier : régularisation légère
+      // DDL singulier ou non contraint : mécanisme ou appui manquant
+      ddlSinguliers.push(p);
       M[p][p] = 1.0;
       x[p] = 0.0;
       continue;
@@ -143,7 +169,7 @@ function resoudreSystemeLineaire(A: number[][], b: number[]): number[] {
     sol[i] = Math.abs(M[i][i]) > 1e-14 ? sum / M[i][i] : 0.0;
   }
 
-  return sol;
+  return { solution: sol, ddlSinguliers };
 }
 
 /**
@@ -231,7 +257,8 @@ export function resoudrePoutreSurRessorts(
   ressorts: RessortNodal[],
   chargesAppliquees: ChargeNodale[],
   appuisBloques: AppuiBloque[],
-  etatInitial?: EtatInitialSolveur
+  etatInitial?: EtatInitialSolveur,
+  options?: OptionsSolveurPoutre
 ): ResultatSolveurPoutre {
   const nbNoeuds = noeuds.length;
   if (nbNoeuds < 2) {
@@ -306,9 +333,11 @@ export function resoudrePoutreSurRessorts(
     }
   }
 
-  // Boucle de résolution non linéaire (Newton / raideur sécante élastoplastique)
-  const MAX_ITER = 100;
-  const TOL_CONV = 1e-4;
+  // Options de résolution
+  const MAX_ITER = options?.maxIterations ?? 100;
+  const TOL_CONV = options?.toleranceConvergence ?? 1e-4;
+  const activerRelaxation = options?.activerRelaxation ?? true;
+  const omegaRelaxation = options?.omegaRelaxation ?? 0.5;
 
   let converge = false;
   let iter = 0;
@@ -329,6 +358,14 @@ export function resoudrePoutreSurRessorts(
       ddlIndex: res.noeudIndex * 3 + dOffset,
     };
   });
+
+  // Détection d'oscillation (historique de plastification pour chaque ressort)
+  const historiquePlastification: boolean[][] = ressorts.map(() => []);
+  let oscillationDetectee = false;
+
+  // Détection de singularité / mécanisme
+  const ddlSinguliersGlobal = new Set<number>();
+  const avertissements: string[] = [];
 
   while (iter < MAX_ITER && !converge) {
     iter++;
@@ -381,7 +418,13 @@ export function resoudrePoutreSurRessorts(
     }
 
     // Résolution
-    const U_nouveau = resoudreSystemeLineaire(K_iter, F_iter);
+    const resLin = resoudreSystemeLineaire(K_iter, F_iter);
+    const U_nouveau = resLin.solution;
+
+    // Collecte des singularités / mécanismes
+    for (const ddl of resLin.ddlSinguliers) {
+      ddlSinguliersGlobal.add(ddl);
+    }
 
     // Calcul de la norme du résidu de déplacement
     let maxDiff = 0;
@@ -394,8 +437,21 @@ export function resoudrePoutreSurRessorts(
 
     residuFinal = maxNorme > 1e-6 ? maxDiff / maxNorme : maxDiff;
 
-    // Mise à jour des déplacements avec légère relaxation si nécessaire
-    const omega = 1.0;
+    // Enregistrement et détection d'oscillation élastique <-> plastifié
+    for (let rIdx = 0; rIdx < ressorts.length; rIdx++) {
+      historiquePlastification[rIdx].push(statutsRessorts[rIdx].plastifie);
+      const h = historiquePlastification[rIdx];
+      const len = h.length;
+      if (len >= 3) {
+        // Basculement alterné consécutif (vrai -> faux -> vrai ou faux -> vrai -> faux)
+        if (h[len - 1] !== h[len - 2] && h[len - 2] !== h[len - 3]) {
+          oscillationDetectee = true;
+        }
+      }
+    }
+
+    // Relaxation numérique : réduction dynamique d'omega à 0.5 si une oscillation est détectée
+    const omega = (activerRelaxation && oscillationDetectee) ? omegaRelaxation : 1.0;
     for (let i = 0; i < nbDDL; i++) {
       U_courant[i] = U_courant[i] + omega * (U_nouveau[i] - U_courant[i]);
     }
@@ -427,6 +483,21 @@ export function resoudrePoutreSurRessorts(
       residuFinal = 0;
       break;
     }
+  }
+
+  // Traitement des mécanismes / singularités détectés
+  if (ddlSinguliersGlobal.size > 0) {
+    const ddlTries = Array.from(ddlSinguliersGlobal).sort((a, b) => a - b);
+    for (const ddl of ddlTries) {
+      const noeudIdx = Math.floor(ddl / 3);
+      const dOffset = ddl % 3;
+      const dir = dOffset === 0 ? 'x' : dOffset === 1 ? 'y' : 'rotation';
+      avertissements.push(
+        `Singularité détectée au DDL ${ddl} (nœud ${noeudIdx}, direction ${dir}) : raideur quasi-nulle, instabilité ou mécanisme (appui manquant)`
+      );
+    }
+    // Un mécanisme réel ne peut être considéré comme physiquement stable
+    converge = false;
   }
 
   // Recalcul exact des réactions des ressorts avec le champ U final
@@ -510,13 +581,16 @@ export function resoudrePoutreSurRessorts(
   }));
 
   // Efforts internes élément par élément
-  // Stockage des efforts aux nœuds (N, V, M)
-  const effortsInternes: ResultatSolveurPoutre['effortsInternes'] = Array.from(
+  // Stockage précis aux nœuds avec distinction gauche/droite pour représenter les sauts
+  const effortsInternes: EffortNodal[] = Array.from(
     { length: nbNoeuds },
-    (_, idx) => ({ noeudIndex: idx, N: 0, V: 0, M: 0 })
+    (_, idx) => ({
+      noeudIndex: idx,
+      N: 0,
+      V: 0,
+      M: 0,
+    })
   );
-
-  const compteursNoeuds = new Array<number>(nbNoeuds).fill(0);
 
   for (const elem of elements) {
     const uG = [
@@ -544,37 +618,41 @@ export function resoudrePoutreSurRessorts(
     const L2 = L * L;
     const L3 = L2 * L;
 
-    // Forces nodales locales d'élément f = kLoc * uLoc
+    // Forces nodales locales d'élément (RdM)
     const N1 = (E * A / L) * (uLoc[0] - uLoc[3]);
     const V1 = (12 * E * I / L3) * (uLoc[1] - uLoc[4]) + (6 * E * I / L2) * (uLoc[2] + uLoc[5]);
     const M1 = (6 * E * I / L2) * (uLoc[1] - uLoc[4]) + (4 * E * I / L) * uLoc[2] + (2 * E * I / L) * uLoc[5];
 
     const N2 = -N1;
-    const V2 = -V1;
-    const M2 = (6 * E * I / L2) * (uLoc[1] - uLoc[4]) + (2 * E * I / L) * uLoc[2] + (4 * E * I / L) * uLoc[5];
 
-    // Convention RdM standard (fibres inférieures) :
-    // Effort normal N (+ en traction) = N2
-    // Moment fléchissant M : M1 = -P*L à l'encastrement
-    // Effort tranchant V : constant = P
-    effortsInternes[elem.n1].N += -N1;
-    effortsInternes[elem.n1].V += -V1;
-    effortsInternes[elem.n1].M += M1;
-    compteursNoeuds[elem.n1]++;
+    // Section droite au nœud n1 (x = 0⁺ dans l'élément, face regardant vers l'amont)
+    effortsInternes[elem.n1].droite = {
+      N: -N1,
+      V: -V1,
+      M: M1,
+    };
 
-    effortsInternes[elem.n2].N += N2;
-    effortsInternes[elem.n2].V += -V1; // tranchant constant sur l'élément non chargé réparti
-    effortsInternes[elem.n2].M += M2;
-    compteursNoeuds[elem.n2]++;
+    // Section gauche au nœud n2 (x = L⁻ dans l'élément, face regardant vers l'aval)
+    // Equilibre analytique de l'élément : V(x) = -V1 (constant), M(L) = M1 - V1 * L
+    effortsInternes[elem.n2].gauche = {
+      N: N2,
+      V: -V1,
+      M: M1 - V1 * L,
+    };
   }
 
-  // Moyennage aux nœuds intérieurs partagés
+  // Attribution des valeurs représentatives (N, V, M) pour chaque nœud (rétrocompatibilité)
   for (let i = 0; i < nbNoeuds; i++) {
-    if (compteursNoeuds[i] > 1) {
-      effortsInternes[i].N /= compteursNoeuds[i];
-      effortsInternes[i].V /= compteursNoeuds[i];
-      effortsInternes[i].M /= compteursNoeuds[i];
-    }
+    const secDroite = effortsInternes[i].droite;
+    const secGauche = effortsInternes[i].gauche;
+
+    effortsInternes[i].N = secDroite?.N ?? secGauche?.N ?? 0;
+    // Moment fléchissant : continu aux nœuds en l'absence de couple ponctuel
+    effortsInternes[i].M = secDroite && secGauche
+      ? (Math.abs(secDroite.M) >= Math.abs(secGauche.M) ? secDroite.M : secGauche.M)
+      : (secDroite?.M ?? secGauche?.M ?? 0);
+    // Tranchant représentatif : valeur section aval (droite) si existante, sinon amont (gauche)
+    effortsInternes[i].V = secDroite?.V ?? secGauche?.V ?? 0;
   }
 
   return {
@@ -586,9 +664,12 @@ export function resoudrePoutreSurRessorts(
       convergé: converge,
       iterations: iter,
       residuFinal,
-      message: converge
-        ? `Convergence atteinte en ${iter} itération(s) (résidu = ${residuFinal.toExponential(2)})`
-        : `Non-convergence après ${iter} itérations (résidu = ${residuFinal.toExponential(2)})`,
+      avertissements,
+      message: ddlSinguliersGlobal.size > 0
+        ? `Instabilité ou mécanisme détecté : ${ddlSinguliersGlobal.size} DDL singulier(s) identifié(s) (appui manquant)`
+        : converge
+          ? `Convergence atteinte en ${iter} itération(s) (résidu = ${residuFinal.toExponential(2)})`
+          : `Non-convergence après ${iter} itérations (résidu = ${residuFinal.toExponential(2)})`,
     },
     equilibreGlobal: {
       sommeChargesAppliqueesY: sumChargesY,

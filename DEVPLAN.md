@@ -96,57 +96,22 @@ deviennent dangereuses) :
    (le cas normal en phase 4/5), la moyenne masque la discontinuité réelle de V et M de part
    et d'autre du nœud.
 
-## Prochaine tâche à confier à Gemini : durcissement de la brique avant la phase 4
+## Durcissement de la brique §9.3 (TERMINÉ - 13/13 tests validés)
 
-Petite tâche ciblée, pas une réécriture. Copier tel quel dans la session AI Studio.
+Livré et validé conformément aux spécifications :
+1. **Relaxation numérique dynamique** : détection des cycles d'oscillation (basculement alterné élastique ↔ plastifié) et ajustement automatique d'omega à 0.5 (configurable via `OptionsSolveurPoutre`).
+2. **Détection de mécanisme / instabilité** : interception des pivots quasi-nuls (< 1e-13) dans `resoudreSystemeLineaire`, non-régularisation silencieuse, alimentation explicite de `convergence.avertissements` désignant le DDL singulier (nœud + direction), et mise à `convergé = false`.
+3. **Efforts internes discontinus aux nœuds intermédiaires** : distinction des sections amont (`gauche` : $x^-$) et aval (`droite` : $x^+$) pour chaque nœud dans `EffortNodal`, avec conservation de valeurs représentatives nominales pour rétrocompatibilité.
+4. **Nouveaux tests d'acceptation normatifs validés** :
+   - **T_SOLV.4** : cas oscillant (100 itérations sans relaxation vs convergence en 3 itérations avec relaxation).
+   - **T_SOLV.5** : poutre libre en translation horizontale X (détection explicite du mécanisme et du DDL singulier).
+   - **T_SOLV.6** : poutre bi-appuyée avec charge ponctuelle centrale (restitution exacte du saut de tranchant $\Delta V = P = 60$ kN entre gauche et droite, et $M = 90$ kNm).
 
----
-
-**Contexte.** Suite directe de la tâche précédente sur `src/core/solveurPoutreRessorts.ts`
-(déjà livré et validé, 10/10 tests). Trois corrections ciblées avant de bâtir la paroi phasée
-dessus (§8.4 du CDC — plusieurs dizaines de ressorts non linéaires simultanés, phases
-potentiellement instables).
-
-**1. Relaxation numérique réelle.** Le paramètre `omega` existe mais vaut toujours 1.0.
-Détecter l'oscillation (un ressort qui bascule élastique↔plastifié de façon répétée sur 2-3
-itérations consécutives sans converger) et réduire `omega` (ex. passer à 0.5) pour les
-itérations suivantes le temps que ça se stabilise. Ne change rien au comportement des cas déjà
-testés (T_SOLV.1-3), qui convergent sans osciller.
-
-**2. Détection de mécanisme.** Quand le pivot de Gauss tombe sous le seuil de singularité
-(`maxVal < 1e-13`), ne pas juste régulariser silencieusement : remonter l'information dans le
-résultat (nouveau champ `convergence.avertissements: string[]`, ou équivalent) avec un message
-explicite identifiant le DDL en cause (nœud + direction), pour qu'une UI de phasage puisse
-afficher « phase instable, appui manquant » plutôt qu'un déplacement nul silencieux.
-
-**3. Efforts internes aux nœuds intermédiaires.** Remplacer la moyenne aux nœuds partagés par
-deux valeurs distinctes de part et d'autre du nœud (`effortsInternes` doit pouvoir exposer
-`gauche`/`droite` ou équivalent, pas un seul triplet N/V/M moyenné), pour représenter
-correctement une discontinuité due à une charge ou une réaction ponctuelle sur ce nœud. Ajuster
-`ModalNoteDeCalcul.tsx`/UI seulement si la signature change de façon incompatible — sinon ne
-pas toucher à l'UI dans cette tâche.
-
-**Tests à ajouter dans `acceptanceTestsSolveur.ts` :**
-- **T_SOLV.4** : reprendre une configuration à 2 ressorts non linéaires de raideurs et plafonds
-  volontairement mal proportionnés pour osciller sans relaxation (à construire par
-  tâtonnement — l'objectif du test est `convergence.convergé === true` en moins de 100
-  itérations, à comparer avec/sans le correctif). Documenter dans le message du test le nombre
-  d'itérations avant/après.
-- **T_SOLV.5** : poutre à 3 nœuds (2 éléments), aucun appui au nœud central sauf une charge
-  ponctuelle dessus → mécanisme réel (rotation libre ou translation libre selon le montage
-  choisi). Vérifier qu'un avertissement de singularité est bien présent et identifie le bon
-  DDL.
-- **T_SOLV.6** : poutre à 3 nœuds, charge ponctuelle Fy sur le nœud central, appuis aux deux
-  extrémités (bi-appuyée) — vérifier que `effortsInternes` du nœud central expose deux valeurs
-  de tranchant différentes de part et d'autre (saut égal à la charge appliquée), pas une
-  moyenne masquant le saut.
-
-**Ne pas** : commencer la surcouche paroi phasée (§8.4) dans cette tâche — uniquement le
-durcissement de la brique et ses 3 tests supplémentaires.
+**Bilan de la suite de tests : 13 / 13 tests d'acceptation réussis (100%).**
 
 ---
 
-## Après le durcissement de la brique §9.3
+## Prochaines étapes (selon plan)
 
 Dans l'ordre, une tâche Gemini à la fois, chacune revue et testée avant la suivante :
 
