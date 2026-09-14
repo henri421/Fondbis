@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
 import { executerTestsAcceptation, TestResultatIndividuel } from '../validation/acceptanceTests';
+import { executerTestsAcceptationSolveur } from '../validation/acceptanceTestsSolveur';
 import { Play, CheckCircle2, XCircle, RefreshCw } from 'lucide-react';
 
 export const OngletValidation: React.FC = () => {
-  const [resultats, setResultats] = useState<TestResultatIndividuel[]>(() => executerTestsAcceptation());
+  const [resultats, setResultats] = useState<TestResultatIndividuel[]>(() => [
+    ...executerTestsAcceptation(),
+    ...executerTestsAcceptationSolveur(),
+  ]);
   const [enCours, setEnCours] = useState(false);
 
   const lancerTests = () => {
     setEnCours(true);
     setTimeout(() => {
-      const res = executerTestsAcceptation();
+      const res = [...executerTestsAcceptation(), ...executerTestsAcceptationSolveur()];
       setResultats(res);
       setEnCours(false);
     }, 150);

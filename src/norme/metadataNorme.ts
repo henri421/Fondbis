@@ -68,6 +68,13 @@ export const CLAUSES_EC7: Record<string, ClauseReference> = {
     statut: 'Normative',
     description: 'Vérification de rupture globale selon la méthode des tranches de Bishop simplifiée.',
   },
+  interaction_sol_structure: {
+    code: 'interaction_sol_structure',
+    clause: 'EN 1997-1:2004 Section 9.3 & Annexe C',
+    titre: 'Interaction sol-structure par éléments finis et appuis élastoplastiques',
+    statut: 'Normative',
+    description: 'Modélisation par poutre sur appuis élastoplastiques représentant les coefficients de réaction de sol avec seuils de butée et de poussée.',
+  },
 };
 
 export const BANDEAU_NORMATIF_OBLIGATOIRE = 
