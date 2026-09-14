@@ -44,123 +44,109 @@ traitée en parallèle, ne dépend de rien d'autre.
 | 1 | Module A : radier, portance ELU, glissement, tassement ELS | ✅ Validé (T1.1-T1.3), UPL/HYD inclus |
 | 2 | Module C niveau 1 : mur en L | ✅ Validé (T2.1) |
 | 3 | Module B : pieu axial isolé puis groupe | ⚠️ Isolé validé (T3.1) ; **groupe de pieux (§7.6) non vérifié** — à confirmer avant de considérer la phase 3 close |
-| — | Brique §9.3 solveur matriciel | ❌ Absente — prérequis des phases 4, 5, 7 |
+| — | Brique §9.3 solveur matriciel | 🟡 Codée et validée (10/10 T_SOLV.1-3), 3 durcissements requis avant la phase 4 (voir revue) |
 | 4 | Module C niveau 2 : phasage et coefficient de réaction | ❌ Non commencé |
 | 5 | Module B transversal : courbes de réaction p-y | ❌ Non commencé |
 | 6 | Stabilité générale + hydraulique | 🟡 En avance, non finalisé (à confronter aux tests §12.6) |
 | 7 | Radier sur ressorts itératifs, export structural | ❌ Non commencé |
 | — | Sensibilité paramétrique (§12.1) | ❌ Absente |
 
-## Prochaine tâche à confier à Gemini : brique §9.3, solveur poutre sur appuis élastiques
+## Revue de la brique §9.3 (2026-09-14, par Claude)
 
-Le CDC place cette brique en prérequis implicite des phases 4, 5 et 7 (« à mutualiser »,
-§6.6 et §8.4) mais ne la numérote pas comme une phase propre. Décision : on l'extrait en
-tâche autonome, testée indépendamment, avant d'attaquer la phase 4. Une paroi phasée bâtie
-directement sur un solveur non éprouvé serait le pire endroit pour découvrir un bug
-d'assemblage matriciel.
+Livrée par Gemini : `src/core/solveurPoutreRessorts.ts` (élément Euler-Bernoulli 6 DDL,
+assemblage, Newton sur raideur sécante) + `src/validation/acceptanceTestsSolveur.ts`
+(T_SOLV.1-3). Revue faite en relisant le code (matrice élémentaire, transformation,
+récupération des efforts internes vérifiées terme à terme contre la formulation standard) et
+en ré-exécutant les tests de façon indépendante (`npm run test:acceptance`, pas seulement en
+faisant confiance au rapport) : **10/10 passent**, algèbre cohérente avec un calcul manuel de
+contrôle sur T_SOLV.2 et T_SOLV.3.
 
-Copier ce qui suit tel quel dans la session AI Studio.
+**1 bug corrigé directement (pas besoin de repasser par Gemini) :** `metadataNorme.ts`
+attribuait à cette brique la référence *« EN 1997-1:2004 Section 9.3 »* avec statut
+`Normative`. Cette clause n'existe pas sous ce sens — le vrai §9.3 de l'EC7 traite des
+« actions, données géométriques et situations de calcul » des ouvrages de soutènement, rien à
+voir avec un solveur EF. La méthode poutre-sur-ressorts est une pratique numérique
+professionnelle, pas une clause EC7 citable : corrigé en `Informative` avec une référence
+honnête (CDC §9.3 + contexte Section 9 EC7). Un tel travers est exactement ce que le CDC §13
+interdit (« aucun de ces éléments ne doit être inventé ») — à surveiller sur les prochaines
+livraisons, notamment quand un nom de clause « sonne juste » sans être vérifié.
 
----
+**Wiring redéfait par le scaffold AI Studio, re-corrigé :** `bun.lock` réintroduit et
+`package-lock.json` supprimé (repris dans l'autre sens), `scripts/runAcceptanceTests.ts`
+créé en doublon de `src/validation/runAcceptanceCli.ts` sans être branché dans
+`package.json` — le rapport « 10/10 » ne pouvait donc pas venir de `npm run test:acceptance`
+tel quel. Consolidé sur `scripts/runAcceptanceTests.ts` (sortie plus complète), l'ancien
+fichier supprimé, script npm rebranché, `package-lock.json` réimposé.
 
-**Contexte.** Fondation est une app géotechnique EC7 (React 19 + Vite + TS strict, PWA
-offline, IndexedDB, pas de backend). Conventions déjà en place à respecter : types stricts
-dans `src/types/`, référence de clause normative via `CLAUSES_EC7` (`src/norme/metadataNorme.ts`),
-retour de chaque fonction de calcul avec `clauseReference` et `statutNormatif`, pas de valeur
-codée en dur, code et commentaires en français.
+**3 limites techniques identifiées, pas bloquantes pour la brique isolée mais à corriger
+avant la phase 4** (paroi phasée = dizaines de ressorts non linéaires simultanés + phases
+d'excavation transitoirement instables — c'est exactement le terrain où ces limites
+deviennent dangereuses) :
 
-**Tâche.** Créer `src/core/solveurPoutreRessorts.ts` : solveur d'éléments finis pour poutre
-plane sur appuis élastiques, à réutiliser tel quel par le module C niveau 2 (paroi phasée),
-le module B transversal (pieu latéral) et l'extension radier sur ressorts.
+1. La relaxation numérique est présente dans la signature (`omega`) mais figée à `1.0` —
+   jamais utilisée. Sans relaxation, un système à plusieurs ressorts plastifiables peut
+   osciller indéfiniment entre deux états actifs au lieu de converger.
+2. Le solveur linéaire régularise silencieusement les lignes quasi singulières (`M[p][p] =
+   1.0; x[p] = 0.0`) sans le signaler. Un mécanisme réel (ex. phase d'excavation avant pose
+   d'un buton) produirait un déplacement à zéro silencieux au lieu d'un avertissement — c'est
+   précisément le genre de résultat faux-silencieux que le CDC (§10) demande d'exclure.
+3. Les efforts internes aux nœuds intérieurs partagés par deux éléments sont moyennés. Correct
+   tant qu'il n'y a pas de charge concentrée sur ce nœud (cas actuel, poutre à 2 nœuds), mais
+   dès qu'un maillage à plusieurs éléments porte un appui ou une charge sur un nœud interne
+   (le cas normal en phase 4/5), la moyenne masque la discontinuité réelle de V et M de part
+   et d'autre du nœud.
 
-**Élément.** Poutre plane à 2 nœuds, 3 DDL par nœud (axial, transversal, rotation) — matrice
-de rigidité élémentaire standard 6×6 (Euler-Bernoulli), assemblage en matrice bande ou creuse,
-factorisation directe (pas besoin d'itératif pour la partie linéaire).
+## Prochaine tâche à confier à Gemini : durcissement de la brique avant la phase 4
 
-**Ressorts.** Appuis ponctuels élastoplastiques : raideur `k` linéaire jusqu'à une réaction
-plafond `Fmax` (positive et négative, bornes indépendantes — cas poussée d'un côté / butée de
-l'autre). Au-delà, réaction plafonnée, pas de raideur négative. Résolution non linéaire par
-itération de Newton sur la raideur sécante de chaque ressort, jusqu'à convergence sur le champ
-de déplacement (critère : norme du résidu de déplacement entre deux itérations < 1e-4, relatif
-à la plus grande flèche, plafond 100 itérations avec avertissement explicite si non convergé —
-ne jamais renvoyer un résultat non convergé sans le signaler).
-
-**Interface attendue (à adapter aux conventions du repo, pas figée dans la forme) :**
-
-```typescript
-export interface NoeudPoutre {
-  x: number; y: number; // position [m]
-}
-
-export interface RessortNodal {
-  noeudIndex: number;
-  raideur: number;        // kN/m ou kN.m/rad selon direction
-  direction: 'x' | 'y' | 'rotation';
-  reactionMax?: number;   // plafond positif [kN ou kN.m], absent = illimité
-  reactionMin?: number;   // plafond négatif, absent = illimité
-}
-
-export interface ChargeNodale {
-  noeudIndex: number;
-  Fx?: number; Fy?: number; Mz?: number;
-}
-
-export interface ResultatSolveurPoutre {
-  deplacements: Array<{ noeudIndex: number; ux: number; uy: number; rz: number }>;
-  reactionsRessorts: Array<{ noeudIndex: number; direction: string; reaction: number; plastifie: boolean }>;
-  effortsInternes: Array<{ noeudIndex: number; N: number; V: number; M: number }>;
-  convergence: { convergé: boolean; iterations: number; residuFinal: number };
-}
-
-export function resoudrePoutreSurRessorts(
-  noeuds: NoeudPoutre[],
-  E: number, I: number, A: number,           // section constante en phase 1, section variable = amélioration ultérieure
-  ressorts: RessortNodal[],
-  chargesAppliquees: ChargeNodale[],
-  appuisBloques: Array<{ noeudIndex: number; direction: 'x' | 'y' | 'rotation' }>, // appuis rigides classiques (encastrement, etc.)
-): ResultatSolveurPoutre;
-```
-
-**Exigence de non-régression.** Le solveur doit accepter un état initial (déplacements +
-statut de plastification de chaque ressort) en entrée optionnelle, pour permettre l'usage en
-phasage (§8.4) où chaque phase repart de l'état final de la précédente — ne pas fermer cette
-porte dans la signature même si elle n'est pas exercée par les tests de cette tâche.
-
-**Tests d'acceptation à coder dans `src/validation/acceptanceTestsSolveur.ts`, même format que
-`acceptanceTests.ts` existant (id, nom, valeurAttendue, valeurObtenue, tolerance, succes) :**
-
-- **T_SOLV.1 — Cantilever, référence poutre classique.** Poutre encastrée-libre, longueur
-  L = 5.00 m, E = 30e6 kPa (béton), I = 0.0208 m⁴ (section 0.5×0.5 m : `I = b*h³/12`),
-  charge ponctuelle P = 100 kN transversale en bout, aucun ressort. Comparer à la solution
-  fermée de résistance des matériaux :
-  ```
-  flèche en bout   : delta = P*L³/(3*E*I)
-  moment à l'encastrement : M = -P*L
-  effort tranchant : V = P (constant)
-  ```
-  Tolérance relative 0.5 % (discrétisation en éléments finis, pas exact analytiquement selon
-  le maillage — si le résultat est exact car un seul élément suffit pour Euler-Bernoulli,
-  resserrer la tolérance à 0.01 %).
-
-- **T_SOLV.2 — Ressort linéaire, équilibre global.** Même poutre, sans charge en bout mais un
-  ressort linéaire `k = 500 kN/m` ajouté au nœud libre en direction `y`, charge ponctuelle
-  P = 50 kN au même nœud. Vérifier : réaction du ressort = `k * uy_noeud` (cohérence
-  Hooke locale) et équilibre global des forces verticales : somme(charges appliquées) =
-  somme(réactions ressorts + réactions appuis bloqués), résidu < 1e-6 kN.
-
-- **T_SOLV.3 — Plastification et convergence.** Même configuration que T_SOLV.2 mais
-  `reactionMax = 20 kN` sur le ressort et charge P = 50 kN (dépasse la capacité du ressort).
-  Vérifier : `convergence.convergé === true`, réaction du ressort plafonnée exactement à
-  20 kN (`plastifie: true`), et que l'équilibre global reste respecté (le complément est repris
-  par un déplacement plus grand, pas par une violation d'équilibre).
-
-**Ne pas** : inventer des coefficients géotechniques, ne pas commencer la surcouche paroi
-phasée (§8.4) ou pieu transversal (§7.7) dans cette tâche — uniquement la brique générique et
-ses 3 tests. La suite viendra en tâche séparée une fois cette brique validée.
+Petite tâche ciblée, pas une réécriture. Copier tel quel dans la session AI Studio.
 
 ---
 
-## Après validation de la brique §9.3
+**Contexte.** Suite directe de la tâche précédente sur `src/core/solveurPoutreRessorts.ts`
+(déjà livré et validé, 10/10 tests). Trois corrections ciblées avant de bâtir la paroi phasée
+dessus (§8.4 du CDC — plusieurs dizaines de ressorts non linéaires simultanés, phases
+potentiellement instables).
+
+**1. Relaxation numérique réelle.** Le paramètre `omega` existe mais vaut toujours 1.0.
+Détecter l'oscillation (un ressort qui bascule élastique↔plastifié de façon répétée sur 2-3
+itérations consécutives sans converger) et réduire `omega` (ex. passer à 0.5) pour les
+itérations suivantes le temps que ça se stabilise. Ne change rien au comportement des cas déjà
+testés (T_SOLV.1-3), qui convergent sans osciller.
+
+**2. Détection de mécanisme.** Quand le pivot de Gauss tombe sous le seuil de singularité
+(`maxVal < 1e-13`), ne pas juste régulariser silencieusement : remonter l'information dans le
+résultat (nouveau champ `convergence.avertissements: string[]`, ou équivalent) avec un message
+explicite identifiant le DDL en cause (nœud + direction), pour qu'une UI de phasage puisse
+afficher « phase instable, appui manquant » plutôt qu'un déplacement nul silencieux.
+
+**3. Efforts internes aux nœuds intermédiaires.** Remplacer la moyenne aux nœuds partagés par
+deux valeurs distinctes de part et d'autre du nœud (`effortsInternes` doit pouvoir exposer
+`gauche`/`droite` ou équivalent, pas un seul triplet N/V/M moyenné), pour représenter
+correctement une discontinuité due à une charge ou une réaction ponctuelle sur ce nœud. Ajuster
+`ModalNoteDeCalcul.tsx`/UI seulement si la signature change de façon incompatible — sinon ne
+pas toucher à l'UI dans cette tâche.
+
+**Tests à ajouter dans `acceptanceTestsSolveur.ts` :**
+- **T_SOLV.4** : reprendre une configuration à 2 ressorts non linéaires de raideurs et plafonds
+  volontairement mal proportionnés pour osciller sans relaxation (à construire par
+  tâtonnement — l'objectif du test est `convergence.convergé === true` en moins de 100
+  itérations, à comparer avec/sans le correctif). Documenter dans le message du test le nombre
+  d'itérations avant/après.
+- **T_SOLV.5** : poutre à 3 nœuds (2 éléments), aucun appui au nœud central sauf une charge
+  ponctuelle dessus → mécanisme réel (rotation libre ou translation libre selon le montage
+  choisi). Vérifier qu'un avertissement de singularité est bien présent et identifie le bon
+  DDL.
+- **T_SOLV.6** : poutre à 3 nœuds, charge ponctuelle Fy sur le nœud central, appuis aux deux
+  extrémités (bi-appuyée) — vérifier que `effortsInternes` du nœud central expose deux valeurs
+  de tranchant différentes de part et d'autre (saut égal à la charge appliquée), pas une
+  moyenne masquant le saut.
+
+**Ne pas** : commencer la surcouche paroi phasée (§8.4) dans cette tâche — uniquement le
+durcissement de la brique et ses 3 tests supplémentaires.
+
+---
+
+## Après le durcissement de la brique §9.3
 
 Dans l'ordre, une tâche Gemini à la fois, chacune revue et testée avant la suivante :
 

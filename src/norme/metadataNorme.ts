@@ -70,10 +70,10 @@ export const CLAUSES_EC7: Record<string, ClauseReference> = {
   },
   interaction_sol_structure: {
     code: 'interaction_sol_structure',
-    clause: 'EN 1997-1:2004 Section 9.3 & Annexe C',
+    clause: 'CDC §9.3 (brique commune) — EN 1997-1:2004 Section 9 pour le contexte de vérification',
     titre: 'Interaction sol-structure par éléments finis et appuis élastoplastiques',
-    statut: 'Normative',
-    description: 'Modélisation par poutre sur appuis élastoplastiques représentant les coefficients de réaction de sol avec seuils de butée et de poussée.',
+    statut: 'Informative',
+    description: 'Méthode numérique (poutre sur appuis élastoplastiques, coefficient de réaction) non prescrite par une clause EC7 spécifique : outil de calcul au service des vérifications normatives de la section 9 (ouvrages de soutènement), pas lui-même une clause citable.',
   },
 };
 
