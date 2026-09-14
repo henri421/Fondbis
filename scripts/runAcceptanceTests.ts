@@ -1,5 +1,6 @@
 import { executerTestsAcceptation } from '../src/validation/acceptanceTests';
 import { executerTestsAcceptationSolveur } from '../src/validation/acceptanceTestsSolveur';
+import { executerTestsAcceptationSoutenement } from '../src/validation/acceptanceTestsSoutenement';
 
 console.log('================================================================');
 console.log('  SUITE DE TESTS D\'ACCEPTATION NORMATIFS — GEOTECH EC7 (EN 1997-1)');
@@ -7,7 +8,8 @@ console.log('================================================================\n'
 
 const testsEC7 = executerTestsAcceptation();
 const testsSolveur = executerTestsAcceptationSolveur();
-const tousLesTests = [...testsEC7, ...testsSolveur];
+const testsSoutenement = executerTestsAcceptationSoutenement();
+const tousLesTests = [...testsEC7, ...testsSolveur, ...testsSoutenement];
 
 let totalSucces = 0;
 

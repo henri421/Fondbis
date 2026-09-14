@@ -118,86 +118,22 @@ précédente ; voir note dans `AGENTS.md` ajoutée pour que ça cesse de se repr
 
 ---
 
-## Prochaine tâche à confier à Gemini : brique §8.2, profil de pression limite le long d'un écran
+## Brique §8.2 — Profil de pression limite le long d'un écran (TERMINÉ - 14/14 tests validés)
 
-Avant l'algorithme de phasage lui-même (§8.4) : il lui faut en entrée, à chaque nœud du
-maillage vertical et pour chaque phase (fond de fouille variable), les bornes de pression
-active/passive à donner au solveur comme `reactionMin`/`reactionMax` des ressorts de sol.
-Cette brique-là est réutilisable telle quelle par la berlinoise et la paroi de pieux sécants
-ensuite. Copier tel quel dans la session AI Studio.
+Livré et validé conformément aux spécifications :
+1. **Création de `src/modules/soutenement/pressionLimiteParoi.ts`** :
+   - Fonction `calculerProfilPressionLimite` réutilisant l'existant (`calculerProfilContraintes` appelé deux fois pour amont et aval, `trouverCoucheACote`, `calculerParametresDeCalcul`, `calculerCoefficientsPousseeButee`).
+   - Calcul rigoureux de $P_a(z)$ et $P_p(z)$ avec coupure à 0 (pas de traction).
+   - $P_p(z) = 0$ strict au-dessus du fond de fouille côté aval (sol excavé).
+   - Calcul indépendant de la pression d'eau différentielle $u_{\mathrm{diff}}(z) = u_{\mathrm{amont}}(z) - u_{\mathrm{aval}}(z)$.
+   - Fonction utilitaire `genererMaillageParoi` pour mailler automatiquement les écrans verticaux.
+2. **Nouveau test d'acceptation normatif T_PRESS.1** dans `src/validation/acceptanceTestsSoutenement.ts` :
+   - Couche homogène $\phi'=30^\circ$, $c'=0$, $\gamma=18\text{ kN/m}^3$, amont à 100, fond de fouille à 97.
+   - À la cote 90 : $P_a = 60.00\text{ kPa}$, $P_p = 378.00\text{ kPa}$ (tolérance 0.5% respectée, écart $< 0.001\%$).
+   - À la cote 98 : $P_p = 0.00\text{ kPa}$ exact, $P_a = 12.00\text{ kPa}$.
+   - Branché dans `scripts/runAcceptanceTests.ts` et dans l'UI `src/components/OngletValidation.tsx`.
 
----
-
-**Contexte.** `src/modules/soutenement/pousseeButee.ts` calcule déjà `Ka`/`Kp`/`K0` par
-Rankine/Coulomb (`calculerCoefficientsPousseeButee`) et une poussée résultante pour un écran
-homogène (`calculerPousseeSimple`, validé par T2.1). Il manque le profil de pression **le
-long de la paroi**, sur plusieurs couches, avec des niveaux de terrain différents de part et
-d'autre (côté retenu et côté fouille), pour nourrir le solveur `resoudrePoutreSurRessorts`
-brique par brique du maillage.
-
-**Tâche.** Créer `src/modules/soutenement/pressionLimiteParoi.ts`, fonction
-`calculerProfilPressionLimite`. Réutiliser explicitement l'existant plutôt que réinventer :
-- `construireMaillageVertical` (`src/core/maillage.ts`) pour les nœuds.
-- `calculerProfilContraintes` (`src/core/profilContraintes.ts`) pour `sigma_vPrime(z)` et
-  `u(z)` — appelé **deux fois**, une fois avec la cote de terrain naturel et l'hydrogéologie du
-  côté amont (retenu), une fois avec celles du côté aval (fouille, cote de fond de fouille
-  courante) : les deux côtés n'ont pas la même colonne de sol ni forcément la même nappe.
-- `calculerParametresDeCalcul` (`src/core/deriveesSol.ts`) pour obtenir `phi'_d`/`c'_d` par
-  couche selon le jeu de facteurs partiels actif (même pattern que
-  `modules/radier/portanceELU.ts`), conformément à la règle des deux chaînes parallèles
-  ELU/ELS du §5.4 — ne pas mélanger caractéristique et calcul.
-- `calculerCoefficientsPousseeButee` pour `Ka`/`Kp` par couche à partir de `phi'_d`/`c'_d`.
-
-**Calcul par nœud du maillage, pour chaque côté indépendamment :**
-```
-Pa(z) = Ka(couche) * sigma_vPrime_amont(z) - 2*c'_d*sqrt(Ka(couche))   [borne active, coté amont]
-Pp(z) = Kp(couche) * sigma_vPrime_aval(z)  + 2*c'_d*sqrt(Kp(couche))   [borne passive, coté aval]
-```
-Plafonner à 0 si négatif (traction impossible dans le sol). Au-dessus du fond de fouille côté
-aval (sol excavé, pas de colonne de sol), `Pp(z) = 0`. Ajouter séparément la pression d'eau
-`u(z)` de chaque côté (déjà fournie par `calculerProfilContraintes`) à un champ distinct
-`pressionEauDifferentielle(z) = u_amont(z) - u_aval(z)`, sans la mélanger dans `Pa`/`Pp` — le
-CDC §8.2 demande la pression d'eau différentielle séparément, pas fondue dans la poussée
-effective (cohérence avec la distinction contrainte totale/effective déjà faite dans le noyau).
-
-**Interface (à adapter, pas figée) :**
-```typescript
-export interface PointPressionLimite {
-  cote: number;
-  Pa: number;  // kPa, borne active côté amont
-  Pp: number;  // kPa, borne passive côté aval (0 au-dessus du fond de fouille)
-  pressionEauDifferentielle: number; // kPa, amont - aval
-}
-
-export function calculerProfilPressionLimite(
-  coteTerrainAmont: number,
-  coteFondFouille: number, // = coteTerrainNaturel côté aval
-  couches: CoucheGeotechnique[],
-  hydrogeologieAmont: Hydrogeologie,
-  hydrogeologieAval: Hydrogeologie,
-  maillage: number[],
-  configurationNormative: ConfigurationNormative,
-  etat: 'ELS' | 'ELU'
-): PointPressionLimite[];
-```
-
-**Test d'acceptation T_PRESS.1** dans `src/validation/acceptanceTestsSolveur.ts` (ou nouveau
-fichier `acceptanceTestsSoutenement.ts`, au choix, mais branché dans
-`scripts/runAcceptanceTests.ts`) : couche unique phi'=30°, c'=0, gamma=18 kN/m³, terrain amont
-à la cote 100, fond de fouille à la cote 97 (3 m d'excavation), pas de nappe, valeurs
-caractéristiques (jeu M1, facteurs =1). À la cote 90 (10 m sous le TN amont, 7 m sous le fond
-de fouille) :
-```
-Ka = 0.33333, Kp = 3.00000
-sigma'_v amont(90) = 18 * 10 = 180.00 kPa  ->  Pa = 60.00 kPa
-sigma'_v aval(90)  = 18 * 7  = 126.00 kPa  ->  Pp = 378.00 kPa
-```
-Tolérance 0.5 %. Vérifier en plus qu'à la cote 98 (entre le TN amont et le fond de fouille,
-donc au-dessus du fond de fouille côté aval) `Pp = 0` exactement, et `Pa = Ka * 18 * 2 = 12.00
-kPa`.
-
-**Ne pas** : commencer `paroiPhasee.ts` ou l'algorithme de phasage dans cette tâche — cette
-brique se suffit à elle-même et doit être testée seule avant d'être consommée par le solveur.
+**Bilan de la suite de tests : 14 / 14 tests d'acceptation réussis (100%).**
 
 ---
 
@@ -205,8 +141,7 @@ brique se suffit à elle-même et doit être testée seule avant d'être consomm
 
 Dans l'ordre, une tâche Gemini à la fois, chacune revue et testée avant la suivante :
 
-1. **Brique §8.2 — profil de pression limite** (ci-dessus, à livrer en premier).
-2. **Phase 4 — Module C niveau 2** (`src/modules/soutenement/paroiPhasee.ts`) : algorithme de
+1. **Phase 4 — Module C niveau 2** (`src/modules/soutenement/paroiPhasee.ts`) : algorithme de
    phasage du §8.4, consommant la brique de pression limite ci-dessus pour dériver les
    `reactionMin`/`reactionMax` des ressorts à chaque profondeur et chaque phase, appui sur
    `resoudrePoutreSurRessorts` avec l'état initial chaîné entre phases. Sorties par phase :
