@@ -202,6 +202,21 @@ export const PROJET_EXEMPLE_EC7: ModeleTerrain = {
         { z: 12.5, qc: 38.0, fs: 0.35, u2: 180.0 },
       ],
     },
+    {
+      id: 'PMT-01',
+      type: 'PMT',
+      x: 12.0,
+      y: 20.0,
+      coteTete: 245.30,
+      profil: [
+        { z: 1.0, EM: 8.5, plNette: 0.85 },
+        { z: 2.5, EM: 12.0, plNette: 1.15 },
+        { z: 4.0, EM: 15.5, plNette: 1.40 },
+        { z: 6.0, EM: 22.0, plNette: 1.85 },
+        { z: 8.5, EM: 45.0, plNette: 2.80 },
+        { z: 11.0, EM: 65.0, plNette: 3.50 },
+      ],
+    },
   ],
   configurationNormative: CONFIG_NORMATIVE_DEFAUT,
   ouvrages: {

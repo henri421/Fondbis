@@ -5,7 +5,7 @@ import {
   evaluerPyReese,
   evaluerPyPressiometrique,
 } from '../modules/pieux/comportementTransversal';
-import { CoucheGeotechnique } from '../types/geotech';
+import { CampagneEssai, CoucheGeotechnique } from '../types/geotech';
 
 function creerCoucheTest(partiel: Partial<CoucheGeotechnique> & { id: string; nom: string; coteToit: number; epaisseur: number; nature: any }): CoucheGeotechnique {
   return {
@@ -199,6 +199,21 @@ export function executerTestsAcceptationPieuxTransversal(): TestResultatIndividu
     },
   });
 
+  const campagnePMTTest: CampagneEssai = {
+    id: 'PMT-TEST-01',
+    type: 'PMT',
+    x: 0,
+    y: 0,
+    coteTete: 15.0,
+    profil: [
+      { z: 1.0, EM: 12.0, plNette: 1.1 },
+      { z: 3.0, EM: 15.0, plNette: 1.3 },
+      { z: 6.0, EM: 18.0, plNette: 1.6 },
+      { z: 10.0, EM: 22.0, plNette: 1.9 },
+      { z: 15.0, EM: 25.0, plNette: 2.2 },
+    ],
+  };
+
   const resMatlock = calculerPieuTransversal({
     diametre: 0.8,
     coteTete: 15.0,
@@ -214,14 +229,15 @@ export function executerTestsAcceptationPieuxTransversal(): TestResultatIndividu
     cotePointe: 0.0,
     chargeH: 100.0,
     couches: [coucheArgile],
+    campagnes: [campagnePMTTest],
     familleCourbe: 'pressiometrique',
   });
 
   tests.push({
     id: 'T_PIEU_LAT.4',
     phase: 'Phase 5',
-    nom: 'Multi-familles de courbes p-y : Matlock et Pressiométrique',
-    description: 'Comparaison opérationnelle entre lois Matlock et Pressiométrique',
+    nom: 'Multi-familles de courbes p-y : Matlock et Pressiométrique (Campagne PMT réelle)',
+    description: 'Comparaison opérationnelle entre lois Matlock et Pressiométrique alimentée par un sondage PMT',
     valeurAttendue: 'Les deux approches convergent et donnent des ordres de grandeur cohérents (déplacement en tête < 30 mm)',
     valeurObtenue: `Matlock : u=${resMatlock.deplacementTete_mm.toFixed(2)} mm, M_max=${resMatlock.momentMaxAbsolu.toFixed(1)} kN.m | Pressiomètre : u=${resPressio.deplacementTete_mm.toFixed(2)} mm, M_max=${resPressio.momentMaxAbsolu.toFixed(1)} kN.m`,
     tolerance: 'Déplacement < 30 mm',
@@ -234,7 +250,39 @@ export function executerTestsAcceptationPieuxTransversal(): TestResultatIndividu
       resMatlock.deplacementTete_mm < 30 &&
       resPressio.deplacementTete_mm > 0 &&
       resPressio.deplacementTete_mm < 30,
-    message: 'Support opérationnel des formulations Matlock et pressiométrique (Ménard / NF P 94-262).',
+    message: 'Support opérationnel des formulations Matlock et pressiométrique (Ménard / NF P 94-262) alimentée par CampagneEssai.',
+  });
+
+  // =========================================================================
+  // T_PIEU_LAT.5 : Absence d'essai PMT et règle CDC §10 / §13 (pas de données inventées)
+  // =========================================================================
+  const resPressioSansEssai = calculerPieuTransversal({
+    diametre: 0.8,
+    coteTete: 15.0,
+    cotePointe: 0.0,
+    chargeH: 100.0,
+    couches: [coucheArgile],
+    familleCourbe: 'pressiometrique',
+    // Aucune campagne PMT ni saisie manuelle
+  });
+
+  const aAvertissementRepli = resPressioSansEssai.convergence.avertissements.some((w) =>
+    w.includes('aucun sondage PMT') && w.includes('CDC §10 et §13')
+  );
+  const familleRepliee = resPressioSansEssai.profils[0]?.familleAppliquee ?? '';
+
+  tests.push({
+    id: 'T_PIEU_LAT.5',
+    phase: 'Phase 5',
+    nom: 'Garde-fou CDC §10/§13 : interdiction des données inventées si PMT absent',
+    description: 'En l’absence d’essais PMT, repli sans fabriquer de coefficient EM/12 avec avertissement explicite',
+    valeurAttendue: 'Avertissement explicite émis, repli automatique sur la loi de sol (Matlock pour argile), pas de crash',
+    valeurObtenue: `Avertissement=${aAvertissementRepli ? 'OUI' : 'NON'}, Loi appliquée=${familleRepliee}, u_tete=${resPressioSansEssai.deplacementTete_mm.toFixed(2)} mm`,
+    tolerance: 'Avertissement conforme CDC présent',
+    ecartAbsolu: aAvertissementRepli ? 0 : 1,
+    ecartPourcentage: 0,
+    succes: aAvertissementRepli && resPressioSansEssai.convergence.converge && familleRepliee.includes('matlock'),
+    message: 'Le solveur refuse d’inventer des pressions limites ou modules pressiométriques fictifs et replie proprement.',
   });
 
   return tests;

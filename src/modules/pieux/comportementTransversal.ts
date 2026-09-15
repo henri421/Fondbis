@@ -1,4 +1,5 @@
 import {
+  CampagneEssai,
   ConfigurationNormative,
   CoucheGeotechnique,
   Hydrogeologie,
@@ -12,7 +13,10 @@ import {
   AppuiBloque,
   ResultatSolveurPoutre,
 } from '../../core/solveurPoutreRessorts';
-import { trouverCoucheACote } from '../../core/profilContraintes';
+import {
+  calculerProfilContraintes,
+  trouverCoucheACote,
+} from '../../core/profilContraintes';
 
 /**
  * Familles de courbes p-y supportées (EN 1997-1 §7.7)
@@ -35,6 +39,16 @@ export interface ParametresPieuTransversal {
   couches: CoucheGeotechnique[];
   hydrogeologie?: Hydrogeologie;
   configurationNormative?: ConfigurationNormative;
+  coteTerrainNaturel?: number;
+
+  // Campagnes d'essais in situ PMT (EN 1997-1 §7.7 & NF P 94-262)
+  campagnes?: CampagneEssai[];
+  sondagePMTId?: string;
+  parametresPressioManuels?: {
+    EM_MPa: number;
+    plNette_MPa: number;
+    alphaRheo?: number;
+  };
   
   // Loi p-y
   familleCourbe?: FamilleCourbePy;
@@ -94,43 +108,105 @@ export interface ResultatPieuTransversal {
 }
 
 /**
- * Calcul de la contrainte verticale effective sigma'v à une cote donnée
+ * Grandeurs pressiométriques interpolées pour le calcul p-y
  */
-function calculerSigmaVPrime(
+export interface ValeursPMTInterpolees {
+  EM_kPa: number;
+  plStar_kPa: number;
+  source: string;
+}
+
+/**
+ * Interpolation des paramètres pressiométriques EM et pl* (ou plNette)
+ * à partir d'un sondage de type 'PMT' ou de paramètres manuels.
+ * Règle CDC §10 et §13 : ne jamais inventer de données non mesurées.
+ */
+export function interpolerValeursPMT(
   cote: number,
-  coteTete: number,
-  couches: CoucheGeotechnique[],
-  hydrogeologie?: Hydrogeologie
-): number {
-  const coteNappe = hydrogeologie?.nappePrincipale.coteCaracteristique ?? -999;
-  const gammaEau = hydrogeologie?.poidsVolumiqueEau ?? 9.81;
+  campagnes?: CampagneEssai[],
+  sondagePMTId?: string,
+  parametresManuels?: { EM_MPa: number; plNette_MPa: number; alphaRheo?: number }
+): ValeursPMTInterpolees | null {
+  // 1. Priorité aux paramètres manuels explicites si saisis
+  if (parametresManuels && parametresManuels.EM_MPa > 0 && parametresManuels.plNette_MPa > 0) {
+    return {
+      EM_kPa: parametresManuels.EM_MPa * 1000.0,
+      plStar_kPa: parametresManuels.plNette_MPa * 1000.0,
+      source: 'Saisie manuelle directe',
+    };
+  }
 
-  let sigmaTotal = 0;
-  let u = 0;
+  // 2. Recherche du sondage PMT dans les campagnes disponibles
+  if (!campagnes || campagnes.length === 0) return null;
 
-  // Intégration de la contrainte des couches au-dessus de la cote cible
-  const couchesTriees = [...couches].sort((a, b) => b.coteToit - a.coteToit);
-  let coteCourante = coteTete;
+  const sondagesPMT = campagnes.filter((c) => c.type === 'PMT');
+  if (sondagesPMT.length === 0) return null;
 
-  for (const c of couchesTriees) {
-    const hautCouche = Math.min(coteCourante, c.coteToit);
-    const basCouche = Math.max(cote, c.coteToit - c.epaisseur);
+  const sondage = sondagePMTId
+    ? sondagesPMT.find((s) => s.id === sondagePMTId) || sondagesPMT[0]
+    : sondagesPMT[0];
 
-    if (hautCouche > basCouche) {
-      const dz = hautCouche - basCouche;
-      // Poids volumique déjaugé ou humide selon nappe
-      const zMoyen = (hautCouche + basCouche) / 2;
-      const gamma = zMoyen < coteNappe ? c.poidsVolumiques.gammaSature.v : c.poidsVolumiques.gammaHumide.v;
-      sigmaTotal += gamma * dz;
-      coteCourante = basCouche;
+  if (!sondage || !sondage.profil || sondage.profil.length === 0) return null;
+
+  // Filtrer les points qui ont EM et plNette définis
+  const pointsValides = sondage.profil
+    .filter(
+      (p) =>
+        p.EM !== undefined &&
+        p.EM !== null &&
+        p.plNette !== undefined &&
+        p.plNette !== null
+    )
+    .map((p) => ({
+      z: p.z,
+      cote: sondage.coteTete - p.z,
+      EM_MPa: p.EM!,
+      plNette_MPa: p.plNette!,
+    }))
+    .sort((a, b) => a.z - b.z); // Du haut vers le bas (z croissant)
+
+  if (pointsValides.length === 0) return null;
+
+  // Profondeur sous la tête du sondage pour la cote demandée
+  const zDemande = sondage.coteTete - cote;
+
+  // Si au-dessus du premier point de mesure
+  if (zDemande <= pointsValides[0].z) {
+    return {
+      EM_kPa: pointsValides[0].EM_MPa * 1000.0,
+      plStar_kPa: pointsValides[0].plNette_MPa * 1000.0,
+      source: `Sondage ${sondage.id} (prolongé en tête)`,
+    };
+  }
+
+  // Si en-dessous du dernier point de mesure
+  const dernier = pointsValides[pointsValides.length - 1];
+  if (zDemande >= dernier.z) {
+    return {
+      EM_kPa: dernier.EM_MPa * 1000.0,
+      plStar_kPa: dernier.plNette_MPa * 1000.0,
+      source: `Sondage ${sondage.id} (prolongé en pointe)`,
+    };
+  }
+
+  // Interpolation linéaire entre deux points consécutifs
+  for (let i = 0; i < pointsValides.length - 1; i++) {
+    const p1 = pointsValides[i];
+    const p2 = pointsValides[i + 1];
+    if (zDemande >= p1.z && zDemande <= p2.z) {
+      const dz = p2.z - p1.z;
+      const t = dz > 1e-6 ? (zDemande - p1.z) / dz : 0;
+      const EM_MPa = p1.EM_MPa + t * (p2.EM_MPa - p1.EM_MPa);
+      const plNette_MPa = p1.plNette_MPa + t * (p2.plNette_MPa - p1.plNette_MPa);
+      return {
+        EM_kPa: EM_MPa * 1000.0,
+        plStar_kPa: plNette_MPa * 1000.0,
+        source: `Sondage ${sondage.id} (interpolé à z=${zDemande.toFixed(2)}m)`,
+      };
     }
   }
 
-  if (cote < coteNappe) {
-    u = (coteNappe - cote) * gammaEau;
-  }
-
-  return Math.max(5.0, sigmaTotal - u); // Seuil minimal de 5 kPa pour éviter division par zéro en surface
+  return null;
 }
 
 /**
@@ -305,8 +381,9 @@ export function evaluerReactionSolPy(
   y: number,
   z: number,
   D: number,
-  sigmaVPrime: number
-): { p: number; pu: number; ksec: number; kini: number; familleUtilisee: string } {
+  sigmaVPrime: number,
+  valeursPMT?: ValeursPMTInterpolees | null
+): { p: number; pu: number; ksec: number; kini: number; familleUtilisee: string; repliUtilise?: boolean } {
   let typeCalcul = famille;
 
   if (typeCalcul === 'automatique') {
@@ -330,12 +407,22 @@ export function evaluerReactionSolPy(
   }
 
   if (typeCalcul === 'pressiometrique') {
-    // Si la couche dispose d'un module d'Young en MPa, on l'utilise pour dériver EM en kPa
-    const eChargementKPa = (couche.deformation?.Echargement?.v ?? 20) * 1000;
-    const EM = couche.nature === 'roche' ? 500000 : eChargementKPa;
-    const plStar = couche.nature === 'roche' ? 3000 : Math.max(200, EM / 12.0);
-    const res = evaluerPyPressiometrique(y, z, D, EM, plStar);
-    return { ...res, familleUtilisee: 'pressiometrique' };
+    // Si de vraies valeurs PMT sont fournies (sondage PMT ou saisie directe)
+    if (valeursPMT && valeursPMT.EM_kPa > 0 && valeursPMT.plStar_kPa > 0) {
+      const res = evaluerPyPressiometrique(y, z, D, valeursPMT.EM_kPa, valeursPMT.plStar_kPa);
+      return { ...res, familleUtilisee: 'pressiometrique' };
+    }
+    // Conformément au CDC §10 et §13 : ne JAMAIS synthétiser de valeurs inventées à partir
+    // du module de tassement Echargement. Si aucune mesure PMT n'existe, repli sur la loi
+    // naturelle de la couche (Matlock pour cohérents, Reese pour frottants).
+    if (couche.nature === 'argile' || couche.nature === 'limon') {
+      const cu = couche.resistanceNonDrainee?.cuTete?.v ?? 40.0;
+      const res = evaluerPyMatlock(y, z, D, cu, sigmaVPrime);
+      return { ...res, familleUtilisee: 'matlock', repliUtilise: true };
+    }
+    const phi = couche.resistanceDrainee?.phiPrime?.v ?? 30.0;
+    const res = evaluerPyReese(y, z, D, phi, sigmaVPrime);
+    return { ...res, familleUtilisee: 'reese', repliUtilise: true };
   }
 
   // Par défaut : Reese
@@ -361,6 +448,10 @@ export function calculerPieuTransversal(
     liaisonTete = 'libre',
     couches,
     hydrogeologie,
+    coteTerrainNaturel,
+    campagnes,
+    sondagePMTId,
+    parametresPressioManuels,
     familleCourbe = 'automatique',
     pasMaillage = 0.25,
     maxIterations = 60,
@@ -422,13 +513,54 @@ export function calculerPieuTransversal(
     },
   ];
 
-  // Calcul des contraintes verticales effectives initiales
+  // Calcul du profil de contraintes effectives via le noyau (EN 1997-1 §3.2)
+  const coteTN = coteTerrainNaturel ?? (couches[0]?.coteToit ?? coteTete);
+  const hydro: Hydrogeologie = hydrogeologie ?? {
+    nappePrincipale: {
+      coteCaracteristique: coteTN - 5.0,
+      coteDefavorableELU: coteTN - 4.0,
+      regime: 'hydrostatique',
+    },
+    gradientVertical: null,
+    nappesSecondaires: [],
+    poidsVolumiqueEau: 9.81,
+  };
+
+  const profilContraintes = calculerProfilContraintes(
+    coteTN,
+    couches,
+    hydro,
+    cotes,
+    'ELU'
+  );
   const sigmasVPrime = cotes.map((c) =>
-    calculerSigmaVPrime(c, coteTete, couches, hydrogeologie)
+    Math.max(5.0, profilContraintes.calculerA(c).sigma_vPrime)
   );
 
   // Identification des couches associées à chaque nœud
   const couchesNoeuds = cotes.map((c) => trouverCoucheACote(couches, c));
+
+  // Interpolation des données pressiométriques pour chaque nœud
+  const valeursPMTParNoeud = cotes.map((c) =>
+    interpolerValeursPMT(c, campagnes, sondagePMTId, parametresPressioManuels)
+  );
+
+  const avertissements: string[] = [];
+  const aDonneesPMT = valeursPMTParNoeud.some((v) => v !== null && v.EM_kPa > 0);
+  if (familleCourbe === 'pressiometrique') {
+    if (aDonneesPMT) {
+      const sourceDesc = parametresPressioManuels
+        ? 'paramètres manuels saisis'
+        : `${valeursPMTParNoeud.find((v) => v !== null)?.source ?? 'sondage PMT'}`;
+      avertissements.push(
+        `Voie pressiométrique (Ménard / NF P 94-262) : calcul fondé sur de vraies mesures PMT (${sourceDesc}).`
+      );
+    } else {
+      avertissements.push(
+        "Voie pressiométrique : aucun sondage PMT ni paramètre EM/pl* manuel n'est renseigné. Conformément au CDC §10 et §13, aucun paramètre n'a été synthétisé à partir des modules de tassement. Repli transparent sur les formulations fondées sur la nature du sol (Matlock / Reese)."
+      );
+    }
+  }
 
   // Initialisation des raideurs initiales des ressorts p-y
   const raideursInitiales: number[] = [];
@@ -436,6 +568,7 @@ export function calculerPieuTransversal(
     const couche = couchesNoeuds[i];
     const z = profondeurs[i];
     const sigVp = sigmasVPrime[i];
+    const pmt = valeursPMTParNoeud[i];
 
     if (!couche) {
       raideursInitiales.push(1000 * largeursTributaires[i]);
@@ -448,7 +581,8 @@ export function calculerPieuTransversal(
       0.001, // petit déplacement test
       z,
       D,
-      sigVp
+      sigVp,
+      pmt
     );
     raideursInitiales.push(pyIni.kini * largeursTributaires[i]);
   }
@@ -460,7 +594,6 @@ export function calculerPieuTransversal(
   let converge = false;
   let iterations = 0;
   let residuFinal = 1.0;
-  const avertissements: string[] = [];
 
   for (let iter = 1; iter <= maxIterations; iter++) {
     iterations = iter;
@@ -511,6 +644,7 @@ export function calculerPieuTransversal(
       const sigVp = sigmasVPrime[i];
       const ux_i = nouveauxDeplacements[i];
       const Lt = largeursTributaires[i];
+      const pmt = valeursPMTParNoeud[i];
 
       if (!couche) {
         nouvellesRaideurs.push(raideursCourantes[i]);
@@ -523,7 +657,8 @@ export function calculerPieuTransversal(
         ux_i,
         z,
         D,
-        sigVp
+        sigVp,
+        pmt
       );
 
       const kSecNodale = evalPy.ksec * Lt;
@@ -539,12 +674,6 @@ export function calculerPieuTransversal(
       converge = true;
       break;
     }
-  }
-
-  if (familleCourbe === 'pressiometrique') {
-    avertissements.push(
-      "Voie pressiométrique : EM et p_l* sont estimés à partir du module de tassement de la couche (Echargement/12), PAS de vraies mesures PMT — aucune campagne d'essai pressiométrique n'est encore reliée au calcul. Résultat indicatif uniquement, ne pas utiliser pour un dimensionnement réglementaire tant que ce câblage n'est pas fait."
-    );
   }
 
   if (!converge) {
@@ -576,6 +705,7 @@ export function calculerPieuTransversal(
 
     const couche = couchesNoeuds[i];
     const sigVp = sigmasVPrime[i];
+    const pmt = valeursPMTParNoeud[i];
 
     let pMobilise = 0;
     let pUltime = 1.0;
@@ -589,7 +719,8 @@ export function calculerPieuTransversal(
         uxN,
         zN,
         D,
-        sigVp
+        sigVp,
+        pmt
       );
       pMobilise = evalPy.p;
       pUltime = evalPy.pu;

@@ -104,6 +104,7 @@ export const OngletPieux: React.FC<OngletPieuxProps> = ({ modele, onUpdatePieu }
           cotePointe={pieuActif.cotePointe}
           couches={modele.couches}
           hydrogeologie={modele.hydrogeologie}
+          campagnes={modele.campagnes}
         />
       ) : (
         <>
@@ -442,6 +443,142 @@ export const OngletPieux: React.FC<OngletPieuxProps> = ({ modele, onUpdatePieu }
             </table>
           </div>
         </div>
+
+        {/* 3. Synthèse Détaillée du Groupe de Pieux (EN 1997-1 §7.6 & CDC §7.6) */}
+        {resPieu.effetDeGroupe.estGroupe && resPieu.effetDeGroupe.nbPieux > 1 && (
+          <div className="p-4 border-t border-slate-200 bg-slate-50/50 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-indigo-600" />
+                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                  Vérification du Groupe de Pieux & Interaction (EN 1997-1 §7.6 & CDC §7.6)
+                </h4>
+              </div>
+              <span className="text-[11px] bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded font-medium">
+                {resPieu.effetDeGroupe.nbPieux} pieux ({pieuActif.groupe.nbPieuxX} × {pieuActif.groupe.nbPieuxY})
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Carte Groupe 1 : Efficacité et Capacité ELU */}
+              <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs space-y-2 text-xs">
+                <div className="flex justify-between items-center pb-1.5 border-b border-slate-100">
+                  <span className="font-bold text-slate-800">Efficacité & Portance ELU</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      resPieu.effetDeGroupe.conformeELU
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-rose-100 text-rose-800'
+                    }`}
+                  >
+                    {resPieu.effetDeGroupe.conformeELU ? 'Conforme ELU' : 'Non conforme'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Rendement η (Converse-Labarre) :</span>
+                  <span className="font-mono font-bold text-indigo-700">
+                    {(resPieu.effetDeGroupe.rendement * 100).toFixed(1)} %
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Résistance de calcul groupe R_cd :</span>
+                  <span className="font-mono font-bold text-slate-900">
+                    {resPieu.effetDeGroupe.R_cd_groupe.toFixed(1)} kN
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Taux d'exploitation groupe :</span>
+                  <span
+                    className={`font-mono font-bold ${
+                      resPieu.effetDeGroupe.tauxExploitationGroupe <= 1.0
+                        ? 'text-emerald-700'
+                        : 'text-rose-700'
+                    }`}
+                  >
+                    {(resPieu.effetDeGroupe.tauxExploitationGroupe * 100).toFixed(1)} %
+                  </span>
+                </div>
+                <div className="pt-1.5 border-t border-slate-100 text-[11px] text-slate-500">
+                  Mode gouvernant :{' '}
+                  <strong className="text-slate-800">
+                    {resPieu.effetDeGroupe.modeGouvernant === 'rupture_en_bloc'
+                      ? 'Rupture en bloc'
+                      : 'Individuel avec efficacité'}
+                  </strong>
+                </div>
+              </div>
+
+              {/* Carte Groupe 2 : Rupture en bloc (Fondation massive équivalente) */}
+              <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-xs space-y-2 text-xs">
+                <div className="flex justify-between items-center pb-1.5 border-b border-slate-100">
+                  <span className="font-bold text-slate-800">Fondation Massive Équivalente</span>
+                  <span className="text-[10px] text-slate-500 font-mono">EC7 §7.6.2.1</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Dimensions bloc (B × L) :</span>
+                  <span className="font-mono font-bold text-slate-800">
+                    {resPieu.effetDeGroupe.ruptureEnBloc.largeurBloc_B} m × {resPieu.effetDeGroupe.ruptureEnBloc.longueurBloc_L} m
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Surface de base & Périmètre :</span>
+                  <span className="font-mono text-slate-700">
+                    {resPieu.effetDeGroupe.ruptureEnBloc.surfaceBloc_A} m² | {resPieu.effetDeGroupe.ruptureEnBloc.perimetreBloc_P} m
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Résistance bloc Rc,bloc;d :</span>
+                  <span className="font-mono font-bold text-slate-900">
+                    {resPieu.effetDeGroupe.ruptureEnBloc.Rc_bloc_d.toFixed(1)} kN
+                  </span>
+                </div>
+                <div className="pt-1.5 border-t border-slate-100 text-[11px] text-slate-500">
+                  Taux rupture en bloc :{' '}
+                  <strong className="text-slate-700">
+                    {(resPieu.effetDeGroupe.ruptureEnBloc.tauxRuptureBloc * 100).toFixed(1)} %
+                  </strong>
+                </div>
+              </div>
+
+              {/* Carte Groupe 3 : Tassement sous charge de service ELS (CDC §7.6) */}
+              <div className="p-3.5 bg-white rounded-xl border border-emerald-200 bg-emerald-50/20 shadow-xs space-y-2 text-xs">
+                <div className="flex justify-between items-center pb-1.5 border-b border-emerald-100">
+                  <span className="font-bold text-slate-900">Tassement ELS (CDC §7.6)</span>
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">
+                    s_groupe &gt; s_isolé ✓
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Tassement pieu isolé s_isolé :</span>
+                  <span className="font-mono font-bold text-slate-800">
+                    {resPieu.effetDeGroupe.tassement.s_isole_mm.toFixed(1)} mm
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Tassement groupe s_groupe :</span>
+                  <span className="font-mono font-extrabold text-emerald-800">
+                    {resPieu.effetDeGroupe.tassement.s_groupe_mm.toFixed(1)} mm
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Amplification d'interaction :</span>
+                  <span className="font-mono font-bold text-indigo-700">
+                    × {resPieu.effetDeGroupe.tassement.ratioAmplification.toFixed(2)}
+                  </span>
+                </div>
+                <div className="pt-1.5 border-t border-emerald-100 text-[11px] text-slate-500 space-y-0.5">
+                  <div>
+                    Semelle équiv. : cote {resPieu.effetDeGroupe.tassement.coteSemelleEquivalente} m (
+                    {resPieu.effetDeGroupe.tassement.largeurSemelleEquivalente}m × {resPieu.effetDeGroupe.tassement.longueurSemelleEquivalente}m)
+                  </div>
+                  <div className="italic text-[10px] text-slate-400">
+                    {resPieu.effetDeGroupe.tassement.methode}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       </>
       )}

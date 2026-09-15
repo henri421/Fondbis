@@ -76,18 +76,18 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
   const nappeELU = hydrogeologie.nappePrincipale.coteDefavorableELU;
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 border border-slate-700/80 rounded-xl overflow-hidden shadow-md">
+    <div className="flex flex-col h-full bg-white border border-slate-200/90 rounded-xl overflow-hidden shadow-xs">
       {/* Barre d'outils de la coupe */}
-      <div className="flex items-center justify-between px-3 py-2 bg-slate-800/90 border-b border-slate-700/80 text-xs text-slate-300">
-        <div className="flex items-center gap-2 font-medium">
-          <Layers className="w-4 h-4 text-emerald-400" />
-          <span>Coupe Stratigraphique & Ouvrage</span>
+      <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-50/90 border-b border-slate-200/80 text-xs text-slate-700">
+        <div className="flex items-center gap-2 font-semibold">
+          <Layers className="w-4 h-4 text-emerald-600" />
+          <span className="text-slate-800">Coupe Stratigraphique & Ouvrage</span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           <button
             id="btn-zoom-in"
             onClick={() => setZoom((z) => Math.min(2.5, z + 0.2))}
-            className="p-1 rounded hover:bg-slate-700 text-slate-300 hover:text-white transition"
+            className="p-1 rounded hover:bg-slate-200/70 text-slate-600 hover:text-slate-900 transition"
             title="Zoom avant"
           >
             <ZoomIn className="w-3.5 h-3.5" />
@@ -95,7 +95,7 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
           <button
             id="btn-zoom-out"
             onClick={() => setZoom((z) => Math.max(0.7, z - 0.2))}
-            className="p-1 rounded hover:bg-slate-700 text-slate-300 hover:text-white transition"
+            className="p-1 rounded hover:bg-slate-200/70 text-slate-600 hover:text-slate-900 transition"
             title="Zoom arrière"
           >
             <ZoomOut className="w-3.5 h-3.5" />
@@ -103,7 +103,7 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
           <button
             id="btn-zoom-reset"
             onClick={() => setZoom(1.0)}
-            className="p-1 rounded hover:bg-slate-700 text-slate-300 hover:text-white transition"
+            className="p-1 rounded hover:bg-slate-200/70 text-slate-600 hover:text-slate-900 transition"
             title="Réinitialiser"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -112,7 +112,7 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
       </div>
 
       {/* Surface SVG de dessin */}
-      <div ref={containerRef} className="relative flex-1 overflow-auto bg-slate-950/70 select-none">
+      <div ref={containerRef} className="relative flex-1 overflow-auto bg-[#fafbfc] select-none">
         <svg
           width={dimensions.width}
           height={Math.max(dimensions.height, paddingHaut + paddingBas + zoneDessinH)}
@@ -120,28 +120,38 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
         >
           <defs>
             <pattern id="hachure-remblai" width="10" height="10" patternUnits="userSpaceOnUse">
-              <path d="M-1,1 l2,-2 M0,10 l10,-10 M9,11 l2,-2" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+              <path d="M-1,1 l2,-2 M0,10 l10,-10 M9,11 l2,-2" stroke="rgba(30,41,59,0.22)" strokeWidth="0.9" />
             </pattern>
             <pattern id="hachure-sable" width="8" height="8" patternUnits="userSpaceOnUse">
-              <circle cx="2" cy="2" r="0.8" fill="rgba(255,255,255,0.25)" />
-              <circle cx="6" cy="6" r="0.8" fill="rgba(255,255,255,0.25)" />
+              <circle cx="2" cy="2" r="0.75" fill="rgba(30,41,59,0.22)" />
+              <circle cx="6" cy="6" r="0.75" fill="rgba(30,41,59,0.22)" />
             </pattern>
             <pattern id="hachure-argile" width="12" height="6" patternUnits="userSpaceOnUse">
-              <line x1="0" y1="3" x2="6" y2="3" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+              <line x1="0" y1="3" x2="6" y2="3" stroke="rgba(30,41,59,0.20)" strokeWidth="0.9" />
             </pattern>
+            <pattern id="hachure-limon" width="12" height="8" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="2" x2="4" y2="2" stroke="rgba(30,41,59,0.20)" strokeWidth="0.9" />
+              <circle cx="9" cy="6" r="0.75" fill="rgba(30,41,59,0.20)" />
+            </pattern>
+            <pattern id="hachure-roche" width="12" height="12" patternUnits="userSpaceOnUse">
+              <path d="M2,2 L10,10 M10,2 L2,10" stroke="rgba(30,41,59,0.16)" strokeWidth="0.8" />
+            </pattern>
+            <marker id="arrow-v" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#d97706" />
+            </marker>
           </defs>
 
           {/* Axe altimétrique vertical à gauche */}
-          <line x1="75" y1={paddingHaut} x2="75" y2={paddingHaut + zoneDessinH} stroke="#475569" strokeWidth="1.5" />
+          <line x1="75" y1={paddingHaut} x2="75" y2={paddingHaut + zoneDessinH} stroke="#94a3b8" strokeWidth="1.5" />
 
           {/* Graduations en mètres */}
           {graduations.map((z) => {
             const y = getSvgY(z);
             return (
               <g key={`grad-${z}`}>
-                <line x1="68" y1={y} x2="75" y2={y} stroke="#64748b" strokeWidth="1" />
-                <line x1="75" y1={y} x2={xSolFin} y2={y} stroke="#1e293b" strokeDasharray="2,4" strokeWidth="0.8" />
-                <text x="63" y={y + 3.5} textAnchor="end" fontSize="10" fill="#94a3b8" fontFamily="monospace">
+                <line x1="68" y1={y} x2="75" y2={y} stroke="#64748b" strokeWidth="1.2" />
+                <line x1="75" y1={y} x2={xSolFin} y2={y} stroke="#e2e8f0" strokeDasharray="3,3" strokeWidth="0.8" />
+                <text x="63" y={y + 3.5} textAnchor="end" fontSize="10" fill="#475569" fontWeight="600" fontFamily="monospace">
                   {z.toFixed(1)} m
                 </text>
               </g>
@@ -154,6 +164,17 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
             const yBase = getSvgY(c.coteToit - c.epaisseur);
             const h = Math.max(2, yBase - yToit);
 
+            const patternUrl =
+              c.nature === 'sable'
+                ? 'url(#hachure-sable)'
+                : c.nature === 'argile'
+                ? 'url(#hachure-argile)'
+                : c.nature === 'limon'
+                ? 'url(#hachure-limon)'
+                : c.nature === 'roche'
+                ? 'url(#hachure-roche)'
+                : 'url(#hachure-remblai)';
+
             return (
               <g key={c.id}>
                 {/* Rectangle de couche */}
@@ -162,9 +183,9 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
                   y={yToit}
                   width={largeurSol}
                   height={h}
-                  fill={c.couleurAffichage || '#334155'}
+                  fill={c.couleurAffichage || '#cbd5e1'}
                   fillOpacity="0.85"
-                  stroke="#0f172a"
+                  stroke="#64748b"
                   strokeWidth="1"
                 />
 
@@ -174,30 +195,46 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
                   y={yToit}
                   width={largeurSol}
                   height={h}
-                  fill={
-                    c.nature === 'sable'
-                      ? 'url(#hachure-sable)'
-                      : c.nature === 'argile'
-                      ? 'url(#hachure-argile)'
-                      : 'url(#hachure-remblai)'
-                  }
+                  fill={patternUrl}
                 />
 
-                {/* Étiquette de couche */}
-                <g transform={`translate(${xSolFin - 10}, ${yToit + 16})`}>
-                  <text textAnchor="end" fill="#ffffff" fontSize="11" fontWeight="bold">
+                {/* Étiquette de couche à droite dans un cartouche propre */}
+                <g transform={`translate(${xSolFin - 8}, ${yToit + 8})`}>
+                  <rect
+                    x="-245"
+                    y="0"
+                    width="240"
+                    height="32"
+                    rx="4"
+                    fill="rgba(255, 255, 255, 0.90)"
+                    stroke="#cbd5e1"
+                    strokeWidth="0.8"
+                  />
+                  <text x="-8" y="13" textAnchor="end" fill="#0f172a" fontSize="10.5" fontWeight="700">
                     {c.nom}
                   </text>
-                  <text textAnchor="end" y="14" fill="#cbd5e1" fontSize="9.5">
-                    ép. {c.epaisseur.toFixed(2)}m • φ'={c.resistanceDrainee.phiPrime.v}° • c'={c.resistanceDrainee.cPrime.v}kPa
+                  <text x="-8" y="25" textAnchor="end" fill="#475569" fontSize="9" fontWeight="500">
+                    ép. {c.epaisseur.toFixed(2)}m • φ'={c.resistanceDrainee.phiPrime.v}° • c'={c.resistanceDrainee.cPrime.v} kPa
                   </text>
                 </g>
 
-                {/* Cote du toit */}
-                <line x1={xSolDebut - 6} y1={yToit} x2={xSolDebut} y2={yToit} stroke="#38bdf8" strokeWidth="1.5" />
-                <text x={xSolDebut + 8} y={yToit + 13} fill="#e2e8f0" fontSize="10" fontWeight="600">
-                  {c.id} ({c.coteToit.toFixed(2)}m)
-                </text>
+                {/* Cote du toit à gauche */}
+                <line x1={xSolDebut - 6} y1={yToit} x2={xSolDebut} y2={yToit} stroke="#0284c7" strokeWidth="1.5" />
+                <g transform={`translate(${xSolDebut + 6}, ${yToit + 6})`}>
+                  <rect
+                    x="0"
+                    y="0"
+                    width={c.id.length * 6 + 64}
+                    height="16"
+                    rx="3"
+                    fill="rgba(255, 255, 255, 0.92)"
+                    stroke="#cbd5e1"
+                    strokeWidth="0.8"
+                  />
+                  <text x="5" y="12" fill="#0f172a" fontSize="9" fontWeight="700" fontFamily="monospace">
+                    {c.id} ({c.coteToit.toFixed(2)} m)
+                  </text>
+                </g>
               </g>
             );
           })}
@@ -208,18 +245,30 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
             y1={getSvgY(coteTerrainNaturel)}
             x2={xSolFin}
             y2={getSvgY(coteTerrainNaturel)}
-            stroke="#22c55e"
+            stroke="#16a34a"
             strokeWidth="2.5"
           />
-          <text
-            x={xSolDebut + 5}
-            y={getSvgY(coteTerrainNaturel) - 6}
-            fill="#4ade80"
-            fontSize="10.5"
-            fontWeight="bold"
-          >
-            TN {coteTerrainNaturel.toFixed(2)} m NGL
-          </text>
+          <g transform={`translate(${xSolDebut + 5}, ${getSvgY(coteTerrainNaturel) - 20})`}>
+            <rect
+              x="0"
+              y="0"
+              width="142"
+              height="18"
+              rx="3"
+              fill="rgba(255, 255, 255, 0.95)"
+              stroke="#86efac"
+              strokeWidth="1"
+            />
+            <text
+              x="6"
+              y="13"
+              fill="#15803d"
+              fontSize="10"
+              fontWeight="700"
+            >
+              TN {coteTerrainNaturel.toFixed(2)} m NGL
+            </text>
+          </g>
 
           {/* Niveau de Nappe ELS (Caractéristique) */}
           {nappeELS > coteBas && (
@@ -229,17 +278,29 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
                 y1={getSvgY(nappeELS)}
                 x2={xSolFin}
                 y2={getSvgY(nappeELS)}
-                stroke="#38bdf8"
+                stroke="#0284c7"
                 strokeWidth="2"
               />
               {/* Symbole triangle nappe */}
               <polygon
-                points={`${xSolDebut + 25},${getSvgY(nappeELS)} ${xSolDebut + 35},${getSvgY(nappeELS)} ${xSolDebut + 30},${getSvgY(nappeELS) + 9}`}
-                fill="#38bdf8"
+                points={`${xSolDebut + 22},${getSvgY(nappeELS)} ${xSolDebut + 32},${getSvgY(nappeELS)} ${xSolDebut + 27},${getSvgY(nappeELS) + 8}`}
+                fill="#0284c7"
               />
-              <text x={xSolDebut + 40} y={getSvgY(nappeELS) + 10} fill="#38bdf8" fontSize="10" fontWeight="bold">
-                Nappe ELS {nappeELS.toFixed(2)} m
-              </text>
+              <g transform={`translate(${xSolDebut + 36}, ${getSvgY(nappeELS) + 2})`}>
+                <rect
+                  x="0"
+                  y="0"
+                  width="118"
+                  height="16"
+                  rx="3"
+                  fill="rgba(255, 255, 255, 0.92)"
+                  stroke="#bae6fd"
+                  strokeWidth="0.8"
+                />
+                <text x="5" y="12" fill="#0369a1" fontSize="9.5" fontWeight="700">
+                  Nappe ELS {nappeELS.toFixed(2)} m
+                </text>
+              </g>
             </g>
           )}
 
@@ -251,17 +312,29 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
                 y1={getSvgY(nappeELU)}
                 x2={xSolFin}
                 y2={getSvgY(nappeELU)}
-                stroke="#f43f5e"
+                stroke="#dc2626"
                 strokeDasharray="5,4"
                 strokeWidth="1.8"
               />
               <polygon
-                points={`${xSolDebut + 90},${getSvgY(nappeELU)} ${xSolDebut + 100},${getSvgY(nappeELU)} ${xSolDebut + 95},${getSvgY(nappeELU) + 9}`}
-                fill="#f43f5e"
+                points={`${xSolDebut + 160},${getSvgY(nappeELU)} ${xSolDebut + 170},${getSvgY(nappeELU)} ${xSolDebut + 165},${getSvgY(nappeELU) + 8}`}
+                fill="#dc2626"
               />
-              <text x={xSolDebut + 105} y={getSvgY(nappeELU) + 10} fill="#fb7185" fontSize="10" fontWeight="bold">
-                Nappe ELU {nappeELU.toFixed(2)} m (défavorable)
-              </text>
+              <g transform={`translate(${xSolDebut + 174}, ${getSvgY(nappeELU) + 2})`}>
+                <rect
+                  x="0"
+                  y="0"
+                  width="175"
+                  height="16"
+                  rx="3"
+                  fill="rgba(255, 255, 255, 0.92)"
+                  stroke="#fecaca"
+                  strokeWidth="0.8"
+                />
+                <text x="5" y="12" fill="#b91c1c" fontSize="9.5" fontWeight="700">
+                  Nappe ELU {nappeELU.toFixed(2)} m (défav.)
+                </text>
+              </g>
             </g>
           )}
 
@@ -287,8 +360,11 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
                       y={getSvgY(coteTerrainNaturel)}
                       width={pixLargeur + 30}
                       height={yBase - getSvgY(coteTerrainNaturel)}
-                      fill="#0f172a"
-                      fillOpacity="0.4"
+                      fill="#f1f5f9"
+                      fillOpacity="0.8"
+                      stroke="#cbd5e1"
+                      strokeDasharray="3,3"
+                      strokeWidth="1"
                     />
 
                     {/* Dalle radier en béton */}
@@ -297,13 +373,13 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
                       y={yHaut}
                       width={pixLargeur}
                       height={pixEpaisseur}
-                      fill="#94a3b8"
-                      stroke="#f1f5f9"
-                      strokeWidth="2"
+                      fill="#cbd5e1"
+                      stroke="#475569"
+                      strokeWidth="1.8"
                     />
 
                     {/* Ligne d'assise */}
-                    <line x1={xDebut} y1={yBase} x2={xDebut + pixLargeur} y2={yBase} stroke="#ef4444" strokeWidth="2.5" />
+                    <line x1={xDebut} y1={yBase} x2={xDebut + pixLargeur} y2={yBase} stroke="#dc2626" strokeWidth="2.5" />
 
                     {/* Flèche de charge verticale V */}
                     <line
@@ -311,31 +387,55 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
                       y1={yHaut - 35}
                       x2={xCentreOuvrage}
                       y2={yHaut}
-                      stroke="#f59e0b"
+                      stroke="#d97706"
                       strokeWidth="3"
                       markerEnd="url(#arrow-v)"
                     />
-                    <text
-                      x={xCentreOuvrage}
-                      y={yHaut - 40}
-                      textAnchor="middle"
-                      fill="#fbbf24"
-                      fontSize="11"
-                      fontWeight="bold"
-                    >
-                      V_Ed = {(radier.actions.V_G * 1.35 + radier.actions.V_Q * 1.5).toFixed(0)} kN
-                    </text>
+                    <g transform={`translate(${xCentreOuvrage - 60}, ${yHaut - 52})`}>
+                      <rect
+                        x="0"
+                        y="0"
+                        width="120"
+                        height="16"
+                        rx="3"
+                        fill="rgba(255, 255, 255, 0.92)"
+                        stroke="#fde68a"
+                        strokeWidth="0.8"
+                      />
+                      <text
+                        x="60"
+                        y="12"
+                        textAnchor="middle"
+                        fill="#b45309"
+                        fontSize="10"
+                        fontWeight="700"
+                      >
+                        V_Ed = {(radier.actions.V_G * 1.35 + radier.actions.V_Q * 1.5).toFixed(0)} kN
+                      </text>
+                    </g>
 
                     {/* Cote sous semelle */}
-                    <text
-                      x={xDebut + pixLargeur + 8}
-                      y={yBase + 4}
-                      fill="#fca5a5"
-                      fontSize="10"
-                      fontWeight="bold"
-                    >
-                      Assise {radier.coteBase.toFixed(2)} m (B={radier.largeurB}m)
-                    </text>
+                    <g transform={`translate(${xDebut + pixLargeur + 8}, ${yBase - 8})`}>
+                      <rect
+                        x="0"
+                        y="0"
+                        width="160"
+                        height="16"
+                        rx="3"
+                        fill="rgba(255, 255, 255, 0.92)"
+                        stroke="#fecaca"
+                        strokeWidth="0.8"
+                      />
+                      <text
+                        x="5"
+                        y="12"
+                        fill="#b91c1c"
+                        fontSize="9.5"
+                        fontWeight="700"
+                      >
+                        Assise {radier.coteBase.toFixed(2)} m (B={radier.largeurB}m)
+                      </text>
+                    </g>
                   </g>
                 );
               })()}
@@ -359,16 +459,16 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
                       y={yTete}
                       width={pixDiam}
                       height={yPointe - yTete}
-                      fill="#64748b"
-                      stroke="#e2e8f0"
+                      fill="#94a3b8"
+                      stroke="#334155"
                       strokeWidth="1.5"
                     />
 
                     {/* Pointe biseautée */}
                     <polygon
                       points={`${xPieu - pixDiam / 2},${yPointe} ${xPieu + pixDiam / 2},${yPointe} ${xPieu},${yPointe + 10}`}
-                      fill="#475569"
-                      stroke="#e2e8f0"
+                      fill="#64748b"
+                      stroke="#334155"
                       strokeWidth="1.5"
                     />
 
@@ -380,28 +480,65 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
                           y1={getSvgY(pieu.frottementNegatif.cotePlanNeutre)}
                           x2={xPieu + pixDiam / 2 + 15}
                           y2={getSvgY(pieu.frottementNegatif.cotePlanNeutre)}
-                          stroke="#fb923c"
+                          stroke="#ea580c"
                           strokeDasharray="3,3"
                           strokeWidth="2"
                         />
-                        <text
-                          x={xPieu + pixDiam / 2 + 20}
-                          y={getSvgY(pieu.frottementNegatif.cotePlanNeutre) + 3}
-                          fill="#fb923c"
-                          fontSize="9.5"
-                        >
-                          Plan neutre ({pieu.frottementNegatif.cotePlanNeutre.toFixed(1)}m)
-                        </text>
+                        <g transform={`translate(${xPieu + pixDiam / 2 + 20}, ${getSvgY(pieu.frottementNegatif.cotePlanNeutre) - 8})`}>
+                          <rect
+                            x="0"
+                            y="0"
+                            width="132"
+                            height="16"
+                            rx="3"
+                            fill="rgba(255, 255, 255, 0.92)"
+                            stroke="#fed7aa"
+                            strokeWidth="0.8"
+                          />
+                          <text
+                            x="5"
+                            y="12"
+                            fill="#c2410c"
+                            fontSize="9"
+                            fontWeight="600"
+                          >
+                            Plan neutre ({pieu.frottementNegatif.cotePlanNeutre.toFixed(1)}m)
+                          </text>
+                        </g>
                       </g>
                     )}
 
                     {/* Cotes tête et pointe */}
-                    <text x={xPieu + pixDiam / 2 + 8} y={yTete + 4} fill="#e2e8f0" fontSize="10" fontWeight="bold">
-                      Tête {pieu.coteTete.toFixed(2)} m
-                    </text>
-                    <text x={xPieu + pixDiam / 2 + 8} y={yPointe + 4} fill="#e2e8f0" fontSize="10" fontWeight="bold">
-                      Pointe {pieu.cotePointe.toFixed(2)} m (Ø {pieu.diametre}m)
-                    </text>
+                    <g transform={`translate(${xPieu + pixDiam / 2 + 8}, ${yTete - 8})`}>
+                      <rect
+                        x="0"
+                        y="0"
+                        width="95"
+                        height="16"
+                        rx="3"
+                        fill="rgba(255, 255, 255, 0.92)"
+                        stroke="#cbd5e1"
+                        strokeWidth="0.8"
+                      />
+                      <text x="5" y="12" fill="#0f172a" fontSize="9.5" fontWeight="700">
+                        Tête {pieu.coteTete.toFixed(2)} m
+                      </text>
+                    </g>
+                    <g transform={`translate(${xPieu + pixDiam / 2 + 8}, ${yPointe - 8})`}>
+                      <rect
+                        x="0"
+                        y="0"
+                        width="155"
+                        height="16"
+                        rx="3"
+                        fill="rgba(255, 255, 255, 0.92)"
+                        stroke="#cbd5e1"
+                        strokeWidth="0.8"
+                      />
+                      <text x="5" y="12" fill="#0f172a" fontSize="9.5" fontWeight="700">
+                        Pointe {pieu.cotePointe.toFixed(2)} m (Ø {pieu.diametre}m)
+                      </text>
+                    </g>
                   </g>
                 );
               })()}
@@ -428,8 +565,11 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
                       y={yFond}
                       width={xVoile - xSolDebut - 15}
                       height={yBase - yFond + 20}
-                      fill="#020617"
-                      fillOpacity="0.8"
+                      fill="#f8fafc"
+                      fillOpacity="0.9"
+                      stroke="#cbd5e1"
+                      strokeDasharray="3,3"
+                      strokeWidth="1"
                     />
 
                     {/* Voile vertical du mur en L */}
@@ -439,7 +579,7 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
                       width={pixEVoile}
                       height={pixH}
                       fill="#94a3b8"
-                      stroke="#f8fafc"
+                      stroke="#334155"
                       strokeWidth="1.5"
                     />
 
@@ -450,30 +590,54 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
                       width={pixB}
                       height={18}
                       fill="#94a3b8"
-                      stroke="#f8fafc"
+                      stroke="#334155"
                       strokeWidth="1.5"
                     />
 
                     {/* Ligne fond de fouille aval */}
-                    <line x1={xSolDebut} y1={yFond} x2={xVoile} y2={yFond} stroke="#38bdf8" strokeWidth="2" />
-                    <text x={xSolDebut + 10} y={yFond - 5} fill="#38bdf8" fontSize="10" fontWeight="bold">
-                      Fond de fouille {mur.coteFondFouille.toFixed(2)} m
-                    </text>
+                    <line x1={xSolDebut} y1={yFond} x2={xVoile} y2={yFond} stroke="#0284c7" strokeWidth="2" />
+                    <g transform={`translate(${xSolDebut + 8}, ${yFond - 20})`}>
+                      <rect
+                        x="0"
+                        y="0"
+                        width="142"
+                        height="16"
+                        rx="3"
+                        fill="rgba(255, 255, 255, 0.92)"
+                        stroke="#bae6fd"
+                        strokeWidth="0.8"
+                      />
+                      <text x="5" y="12" fill="#0369a1" fontSize="9.5" fontWeight="700">
+                        Fond de fouille {mur.coteFondFouille.toFixed(2)} m
+                      </text>
+                    </g>
 
                     {/* Flèches de poussée active sur le voile */}
                     <polygon
                       points={`${xVoile + pixEVoile + 25},${yTete + pixH * 0.6} ${xVoile + pixEVoile + 5},${yTete + pixH * 0.6} ${xVoile + pixEVoile + 10},${yTete + pixH * 0.6 - 4} ${xVoile + pixEVoile + 10},${yTete + pixH * 0.6 + 4}`}
-                      fill="#f97316"
+                      fill="#ea580c"
                     />
-                    <text
-                      x={xVoile + pixEVoile + 30}
-                      y={yTete + pixH * 0.6 + 3}
-                      fill="#fb923c"
-                      fontSize="10"
-                      fontWeight="bold"
-                    >
-                      Poussée Pa
-                    </text>
+                    <g transform={`translate(${xVoile + pixEVoile + 28}, ${yTete + pixH * 0.6 - 8})`}>
+                      <rect
+                        x="0"
+                        y="0"
+                        width="76"
+                        height="16"
+                        rx="3"
+                        fill="rgba(255, 255, 255, 0.92)"
+                        stroke="#fed7aa"
+                        strokeWidth="0.8"
+                      />
+                      <text
+                        x="5"
+                        y="12"
+                        fill="#c2410c"
+                        fontSize="9.5"
+                        fontWeight="700"
+                      >
+                        Poussée Pa
+                      </text>
+                    </g>
                   </g>
                 );
               })()}
@@ -483,22 +647,22 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
       </div>
 
       {/* Légende en pied de coupe */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 bg-slate-900 border-t border-slate-800 text-[11px] text-slate-400">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3.5 py-2.5 bg-slate-50 border-t border-slate-200 text-[11px] text-slate-600">
         <div className="flex items-center gap-1.5">
-          <span className="w-3 h-0.5 bg-emerald-500 inline-block"></span>
-          <span>Terrain Naturel (TN)</span>
+          <span className="w-3.5 h-1 bg-emerald-600 rounded-full inline-block"></span>
+          <span className="font-medium text-slate-700">Terrain Naturel (TN)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-3 h-0.5 bg-sky-400 inline-block"></span>
-          <span>Nappe ELS</span>
+          <span className="w-3.5 h-1 bg-sky-600 rounded-full inline-block"></span>
+          <span className="font-medium text-slate-700">Nappe ELS</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-3 h-0.5 bg-rose-500 border-b border-dashed border-rose-500 inline-block"></span>
-          <span>Nappe ELU défavorable</span>
+          <span className="w-3.5 h-1 bg-rose-600 rounded-full border-b border-dashed border-rose-600 inline-block"></span>
+          <span className="font-medium text-slate-700">Nappe ELU défavorable</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-3 h-2 bg-slate-400 rounded-xs inline-block"></span>
-          <span>Béton armé</span>
+          <span className="w-3.5 h-2.5 bg-slate-300 border border-slate-500 rounded-xs inline-block"></span>
+          <span className="font-medium text-slate-700">Béton armé</span>
         </div>
       </div>
     </div>

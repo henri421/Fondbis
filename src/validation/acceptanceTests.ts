@@ -334,5 +334,60 @@ export function executerTestsAcceptation(config: ConfigurationNormative = CONFIG
       : "Écart ou mauvaise détection de la branche gouvernante",
   });
 
+  // ----------------------------------------------------
+  // T3.2 : Groupe de pieux — Efficacité Converse-Labarre, Rupture en bloc & Tassement (s_groupe > s_isole)
+  // CDC §7.6 & EN 1997-1 §7.6.2.1
+  // Configuration : 2x2 = 4 pieux, d=0.8 m, entraxe s=2.4 m (s/d = 3.0)
+  // Efficacité attendue Converse-Labarre :
+  // theta = arctan(0.8/2.4) = 18.435°
+  // eta = 1 - (18.435 / 90) * [(1*2 + 1*2) / 4] = 1 - 0.2048 = 0.795 (79.5%)
+  // Tassement de groupe : s_groupe > s_isole (ratio > 1.0)
+  // ----------------------------------------------------
+  const ouvrageGroupeT32 = {
+    ...ouvragePieuT31,
+    id: 'PIEU_T32_GROUPE',
+    nom: 'Groupe 2x2 test T3.2',
+    groupe: {
+      estGroupe: true,
+      nbPieuxX: 2,
+      nbPieuxY: 2,
+      entraxe: 2.4,
+    },
+  };
+
+  const resT32 = calculerCapacitePieu(ouvrageGroupeT32, [coucheT1], hydroSansNappe, config, [950, 1100, 950]);
+  const etaAttendu = 0.795;
+  const etaObtenu = resT32.groupe.efficaciteConverseLabarre;
+  const eta_ok = Math.abs(etaObtenu - etaAttendu) <= 0.005;
+  const bloc_ok = resT32.groupe.ruptureEnBloc.largeurBloc_B === 3.2 && resT32.groupe.ruptureEnBloc.longueurBloc_L === 3.2;
+  const s_isole = resT32.groupe.tassement.s_isole_mm;
+  const s_groupe = resT32.groupe.tassement.s_groupe_mm;
+  const tassement_sup_ok = s_groupe > s_isole;
+  const t32_succes = eta_ok && bloc_ok && tassement_sup_ok;
+
+  resultats.push({
+    id: 'T3.2',
+    nom: 'Groupe de pieux (Converse-Labarre, rupture en bloc, s_groupe > s_isole)',
+    phase: 'Phase 3',
+    description: 'Vérification de l’efficacité η (Converse-Labarre 2x2, s=3d), dimensions bloc et amplification de tassement',
+    valeurAttendue: 'η = 0.795 (±0.005), Bloc 3.2m x 3.2m, s_groupe > s_isole',
+    valeurObtenue: `η = ${etaObtenu.toFixed(3)} (${(etaObtenu * 100).toFixed(1)}%), Bloc ${resT32.groupe.ruptureEnBloc.largeurBloc_B}m x ${resT32.groupe.ruptureEnBloc.longueurBloc_L}m, s_groupe=${s_groupe.toFixed(1)} mm > s_isole=${s_isole.toFixed(1)} mm (ratio x${resT32.groupe.tassement.ratioAmplification})`,
+    tolerance: 'η ± 0.005, dimensions exactes, s_groupe > s_isole',
+    ecartAbsolu: Number(Math.abs(etaObtenu - etaAttendu).toFixed(3)),
+    ecartPourcentage: Number((Math.abs(etaObtenu - etaAttendu) / etaAttendu * 100).toFixed(2)),
+    succes: t32_succes,
+    message: t32_succes
+      ? "Efficacité Converse-Labarre exacte, géométrie de bloc vérifiée et s_groupe > s_isole validé"
+      : "Erreur sur le rendement de groupe ou la condition de tassement s_groupe > s_isole",
+    details: {
+      efficacite: etaObtenu,
+      modeGouvernant: resT32.groupe.modeGouvernant,
+      Rc_d_groupe: resT32.groupe.Rc_d_groupe,
+      tassementIsole_mm: s_isole,
+      tassementGroupe_mm: s_groupe,
+      ratioAmplification: resT32.groupe.tassement.ratioAmplification,
+    },
+  });
+
   return resultats;
 }

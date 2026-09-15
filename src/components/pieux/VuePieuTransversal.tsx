@@ -4,7 +4,7 @@ import {
   FamilleCourbePy,
   ResultatPieuTransversal,
 } from '../../modules/pieux/comportementTransversal';
-import { CoucheGeotechnique, Hydrogeologie } from '../../types/geotech';
+import { CampagneEssai, CoucheGeotechnique, Hydrogeologie } from '../../types/geotech';
 import {
   Activity,
   CheckCircle2,
@@ -13,6 +13,7 @@ import {
   ArrowRight,
   TrendingDown,
   Compass,
+  FileText,
 } from 'lucide-react';
 
 interface VuePieuTransversalProps {
@@ -21,6 +22,7 @@ interface VuePieuTransversalProps {
   cotePointe: number;
   couches: CoucheGeotechnique[];
   hydrogeologie: Hydrogeologie;
+  campagnes?: CampagneEssai[];
 }
 
 export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
@@ -29,6 +31,7 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
   cotePointe,
   couches,
   hydrogeologie,
+  campagnes,
 }) => {
   // Paramètres transversaux configurables
   const [chargeH, setChargeH] = useState<number>(100); // kN
@@ -37,6 +40,21 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
   const [familleCourbe, setFamilleCourbe] = useState<FamilleCourbePy>('automatique');
   const [moduleE_GPa, setModuleE_GPa] = useState<number>(30); // Béton C25/30 ou C30/37
   const [pasDiscretisation, setPasDiscretisation] = useState<number>(0.25); // m
+
+  // Gestion des campagnes PMT réelles et paramètres manuels
+  const sondagesPMT = useMemo(() => {
+    return (campagnes ?? []).filter((c) => c.type === 'PMT');
+  }, [campagnes]);
+
+  const [sondagePMTSelectionne, setSondagePMTSelectionne] = useState<string>('');
+  const [modeSaisieManuellePMT, setModeSaisieManuellePMT] = useState<boolean>(false);
+  const [emManuel, setEmManuel] = useState<number>(15); // MPa
+  const [plNetteManuelle, setPlNetteManuelle] = useState<number>(1.2); // MPa
+
+  const idPMTActif = useMemo(() => {
+    if (sondagePMTSelectionne) return sondagePMTSelectionne;
+    return sondagesPMT[0]?.id ?? '';
+  }, [sondagePMTSelectionne, sondagesPMT]);
 
   // Calcul transversal
   const resultat: ResultatPieuTransversal = useMemo(() => {
@@ -52,6 +70,11 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
       familleCourbe,
       couches,
       hydrogeologie,
+      campagnes,
+      sondagePMTId: !modeSaisieManuellePMT && idPMTActif ? idPMTActif : undefined,
+      parametresPressioManuels: modeSaisieManuellePMT
+        ? { EM_MPa: emManuel, plNette_MPa: plNetteManuelle }
+        : undefined,
       maxIterations: 60,
       toleranceConvergence: 1e-3,
     });
@@ -67,6 +90,11 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
     familleCourbe,
     couches,
     hydrogeologie,
+    campagnes,
+    modeSaisieManuellePMT,
+    idPMTActif,
+    emManuel,
+    plNetteManuelle,
   ]);
 
   const longueurPieu = Math.max(0.1, coteTete - cotePointe);
@@ -199,15 +227,123 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
       </div>
 
       {familleCourbe === 'pressiometrique' && (
-        <div className="flex items-start gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900">
-          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
-          <p className="text-xs leading-relaxed">
-            <span className="font-semibold">Indicatif uniquement.</span> E<sub>M</sub> et
-            p<sub>l</sub>* sont estimés depuis le module de tassement de la couche, pas
-            depuis une vraie campagne pressiométrique (PMT) — aucune n'est encore reliée à ce
-            calcul. Ne pas utiliser pour un dimensionnement réglementaire tant que ce
-            câblage n'existe pas.
-          </p>
+        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-rose-500" />
+              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                Mesures pressiométriques réelles (EN 1997-1 §7.7 / NF P 94-262)
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setModeSaisieManuellePMT(false)}
+                disabled={sondagesPMT.length === 0}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${
+                  !modeSaisieManuellePMT && sondagesPMT.length > 0
+                    ? 'bg-rose-600 text-white border-rose-600'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100 disabled:opacity-40'
+                }`}
+              >
+                Sondage in situ ({sondagesPMT.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setModeSaisieManuellePMT(true)}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${
+                  modeSaisieManuellePMT
+                    ? 'bg-rose-600 text-white border-rose-600'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                Saisie directe
+              </button>
+            </div>
+          </div>
+
+          {!modeSaisieManuellePMT && sondagesPMT.length > 0 ? (
+            <div className="flex items-center gap-4 bg-white p-3 rounded-lg border border-slate-200">
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Sondage PMT de référence (interpolé nœud par nœud sur z)
+                </label>
+                <select
+                  value={idPMTActif}
+                  onChange={(e) => setSondagePMTSelectionne(e.target.value)}
+                  className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500"
+                >
+                  {sondagesPMT.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.id} — Tête {s.coteTete.toFixed(2)} m NGF ({s.profil.filter(p => p.EM !== undefined).length} points d’essai)
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="text-xs text-slate-500 pt-5">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Profil in situ relié
+                </span>
+              </div>
+            </div>
+          ) : modeSaisieManuellePMT ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white p-3 rounded-lg border border-slate-200">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Module pressiométrique E<sub>M</sub> [MPa]
+                </label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  value={emManuel}
+                  onChange={(e) => setEmManuel(parseFloat(e.target.value) || 1)}
+                  className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Pression limite nette p<sub>l</sub>* [MPa]
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0.05"
+                  value={plNetteManuelle}
+                  onChange={(e) => setPlNetteManuelle(parseFloat(e.target.value) || 0.1)}
+                  className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+              <div className="text-xs space-y-1">
+                <p className="font-semibold">
+                  Aucun sondage pressiométrique (PMT) dans la campagne d’essais
+                </p>
+                <p>
+                  Conformément au CDC §10 et §13, aucun module E<sub>M</sub> ni pression limite p<sub>l</sub>*
+                  n’est inventé à partir des modules de déformation. Vous pouvez basculer en mode « Saisie directe »
+                  ci-dessus ou renseigner un sondage PMT dans les campagnes d’essai. En attendant, un repli rigoureux
+                  sur les formulations de sol intrinsèques est appliqué.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Avertissements du solveur / CDC */}
+      {resultat.convergence.avertissements.length > 0 && (
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
+          {resultat.convergence.avertissements.map((av, idx) => (
+            <div key={idx} className="flex items-start gap-2 text-xs text-amber-900">
+              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-600" />
+              <span>{av}</span>
+            </div>
+          ))}
         </div>
       )}
 
@@ -385,6 +521,7 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
               <tr>
                 <th className="px-3 py-2">Profondeur z (m)</th>
                 <th className="px-3 py-2">Cote (m)</th>
+                <th className="px-3 py-2">Loi p-y</th>
                 <th className="px-3 py-2">Déplacement u (mm)</th>
                 <th className="px-3 py-2">Moment M (kNm)</th>
                 <th className="px-3 py-2">Effort tranchant V (kN)</th>
@@ -399,6 +536,15 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
                     {p.profondeur.toFixed(2)}
                   </td>
                   <td className="px-3 py-1.5 text-slate-500">{p.cote.toFixed(2)}</td>
+                  <td className="px-3 py-1.5 font-sans text-[11px]">
+                    <span
+                      className={`px-1.5 py-0.5 rounded-md border text-[10px] font-semibold ${
+                        STYLE_LOI[p.familleAppliquee]?.classes ?? 'bg-slate-50 text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      {STYLE_LOI[p.familleAppliquee]?.label ?? p.familleAppliquee}
+                    </span>
+                  </td>
                   <td className="px-3 py-1.5 text-sky-700 font-bold">
                     {p.ux_mm.toFixed(3)}
                   </td>

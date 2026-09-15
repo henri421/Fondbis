@@ -6,6 +6,7 @@ import {
 } from '../../types/geotech';
 import { CLAUSES_EC7 } from '../../norme/metadataNorme';
 import { trouverCoucheACote } from '../../core/profilContraintes';
+import { calculerComportementGroupePieux, ResultatEffetDeGroupe } from './comportementGroupe';
 
 export interface ResultatCapacitePieu {
   // Entrées
@@ -48,19 +49,9 @@ export interface ResultatCapacitePieu {
   
   tauxExploitationPieuIsole: number;
   
-  // Groupe de pieux
-  groupe: {
-    estGroupe: boolean;
-    nbPieuxTotal: number;
-    efficaciteConverseLabarre: number;
-    Rc_k_groupe: number; // kN
-    Rc_d_groupe: number; // kN
-    chargeTotaleGroupe: number; // kN
-    tauxExploitationGroupe: number;
-    ruptureEnBloc: {
-      portanceBloc_Rd: number; // kN
-      tauxRuptureBloc: number;
-    };
+  // Groupe de pieux (EN 1997-1 §7.6 & CDC §7.6)
+  groupe: ResultatEffetDeGroupe & {
+    chargeTotaleGroupe: number; // alias rétro-compatible
   };
   
   clauseReference: string;
@@ -171,45 +162,20 @@ export function calculerCapacitePieu(
   const V_d_total = V_dst_structure + actionQneg_d;
   const tauxExploitationPieuIsole = V_d_total / Math.max(1, Rc_d);
 
-  // Comportement de groupe
-  let nbPieuxTotal = 1;
-  let efficaciteConverseLabarre = 1.0;
-  let Rc_k_groupe = Rc_k;
-  let Rc_d_groupe = Rc_d;
-  let chargeTotaleGroupe = V_d_total;
-  let tauxExploitationGroupe = tauxExploitationPieuIsole;
-  let portanceBloc_Rd = Rc_d;
-  let tauxRuptureBloc = tauxExploitationPieuIsole;
-
-  if (groupe.estGroupe && groupe.nbPieuxX > 0 && groupe.nbPieuxY > 0) {
-    const mP = groupe.nbPieuxX;
-    const nP = groupe.nbPieuxY;
-    nbPieuxTotal = mP * nP;
-    const s = Math.max(diametre * 1.5, groupe.entraxe);
-
-    // Formule classique d'efficacité de Converse-Labarre :
-    // eta = 1 - [theta / 90°] * [ (m-1)*n + (n-1)*m ] / (m * n)
-    const thetaDeg = (Math.atan(diametre / s) * 180) / Math.PI;
-    const num = (mP - 1) * nP + (nP - 1) * mP;
-    const denom = mP * nP;
-    efficaciteConverseLabarre = Math.max(0.5, 1 - (thetaDeg / 90) * (num / denom));
-
-    Rc_k_groupe = nbPieuxTotal * Rc_k * efficaciteConverseLabarre;
-    Rc_d_groupe = nbPieuxTotal * Rc_d * efficaciteConverseLabarre;
-    chargeTotaleGroupe = V_d_total * nbPieuxTotal;
-    tauxExploitationGroupe = chargeTotaleGroupe / Math.max(1, Rc_d_groupe);
-
-    // Rupture en bloc (groupe + sol intérieur)
-    const largeurBloc = (mP - 1) * s + diametre;
-    const longueurBloc = (nP - 1) * s + diametre;
-    const surfaceBloc = largeurBloc * longueurBloc;
-    const perimetreBloc = 2 * (largeurBloc + longueurBloc);
-    // Portance bloc équivalent
-    const Rb_bloc = (Rb_k / sectionPointe) * surfaceBloc;
-    const Rs_bloc = (Rs_k / perimetreFût) * perimetreBloc;
-    portanceBloc_Rd = (Rb_bloc / gamma_b + Rs_bloc / gamma_s) * 0.9;
-    tauxRuptureBloc = chargeTotaleGroupe / Math.max(1, portanceBloc_Rd);
-  }
+  // Comportement de groupe (EN 1997-1 §7.6 & CDC §7.6)
+  const resultatGroupe = calculerComportementGroupePieux({
+    ouvrage,
+    couches,
+    hydrogeologie,
+    Rb_k_isole: Rb_k,
+    Rs_k_isole: Rs_k,
+    Rc_k_isole: Rc_k,
+    Rb_d_isole: Rb_d,
+    Rs_d_isole: Rs_d,
+    Rc_d_isole: Rc_d,
+    gamma_b,
+    gamma_s,
+  });
 
   return {
     diametre,
@@ -240,17 +206,8 @@ export function calculerCapacitePieu(
     V_d_total: Number(V_d_total.toFixed(1)),
     tauxExploitationPieuIsole: Number(tauxExploitationPieuIsole.toFixed(3)),
     groupe: {
-      estGroupe: groupe.estGroupe,
-      nbPieuxTotal,
-      efficaciteConverseLabarre: Number(efficaciteConverseLabarre.toFixed(3)),
-      Rc_k_groupe: Number(Rc_k_groupe.toFixed(1)),
-      Rc_d_groupe: Number(Rc_d_groupe.toFixed(1)),
-      chargeTotaleGroupe: Number(chargeTotaleGroupe.toFixed(1)),
-      tauxExploitationGroupe: Number(tauxExploitationGroupe.toFixed(3)),
-      ruptureEnBloc: {
-        portanceBloc_Rd: Number(portanceBloc_Rd.toFixed(1)),
-        tauxRuptureBloc: Number(tauxRuptureBloc.toFixed(3)),
-      },
+      ...resultatGroupe,
+      chargeTotaleGroupe: Number(resultatGroupe.chargeTotaleGroupe_Ed.toFixed(1)),
     },
     clauseReference: CLAUSES_EC7.correlation_pieux.clause,
     statutNormatif: CLAUSES_EC7.correlation_pieux.statut,
@@ -286,9 +243,16 @@ export interface ResultatVerificationPieuAxial {
     R_sk_i: number;
   }>;
   effetDeGroupe: {
+    estGroupe: boolean;
     rendement: number;
     nbPieux: number;
     R_cd_groupe: number;
+    modeGouvernant: 'individuel_avec_efficacite' | 'rupture_en_bloc';
+    tauxExploitationGroupe: number;
+    conformeELU: boolean;
+    ruptureEnBloc: ResultatEffetDeGroupe['ruptureEnBloc'];
+    tassement: ResultatEffetDeGroupe['tassement'];
+    synthese: string;
   };
 }
 
@@ -356,9 +320,16 @@ export function verifierPieuAxial(
     },
     detailsCouches,
     effetDeGroupe: {
+      estGroupe: resCapacite.groupe.estGroupe,
       rendement: resCapacite.groupe.efficaciteConverseLabarre,
       nbPieux: resCapacite.groupe.nbPieuxTotal,
       R_cd_groupe: resCapacite.groupe.Rc_d_groupe,
+      modeGouvernant: resCapacite.groupe.modeGouvernant,
+      tauxExploitationGroupe: resCapacite.groupe.tauxExploitationGroupe,
+      conformeELU: resCapacite.groupe.conformeELU,
+      ruptureEnBloc: resCapacite.groupe.ruptureEnBloc,
+      tassement: resCapacite.groupe.tassement,
+      synthese: resCapacite.groupe.synthese,
     },
   };
 }
