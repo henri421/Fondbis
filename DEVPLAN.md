@@ -45,8 +45,8 @@ traitée en parallèle, ne dépend de rien d'autre.
 | 2 | Module C niveau 1 : mur en L | ✅ Validé (T2.1) |
 | 3 | Module B : pieu axial isolé puis groupe | ⚠️ Isolé validé (T3.1) ; **groupe de pieux (§7.6) non vérifié** — à confirmer avant de considérer la phase 3 close |
 | — | Brique §9.3 solveur matriciel | ✅ Durci et validé (13/13 T_SOLV.1-6) |
-| — | Brique §8.2 profil de pression limite | ✅ Livrée (14/14, T_PRESS.1), à revoir par Claude avant d'envoyer la phase 4 |
-| 4 | Module C niveau 2 : phasage et coefficient de réaction | ⏳ Spec prête (« Tâche suivante » ci-dessus), en attente de revue de §8.2 avant envoi |
+| — | Brique §8.2 profil de pression limite | ✅ Livrée et revue par Claude (14/14, T_PRESS.1) |
+| 4 | Module C niveau 2 : phasage et coefficient de réaction | ⏳ Spec prête, revue §8.2 faite — à envoyer à Gemini |
 | 5 | Module B transversal : courbes de réaction p-y | ❌ Non commencé |
 | 6 | Stabilité générale + hydraulique | 🟡 En avance, non finalisé (à confronter aux tests §12.6) |
 | 7 | Radier sur ressorts itératifs, export structural | ❌ Non commencé |
@@ -136,16 +136,36 @@ Livré et validé conformément aux spécifications :
 
 **Bilan de la suite de tests : 14 / 14 tests d'acceptation réussis (100%).**
 
+**Revue Claude (2026-09-15) :** re-exécution indépendante de `npm run test:acceptance`
+(14/14), puis recalcul manuel de T_PRESS.1 pour vérifier `calculerProfilPressionLimite`
+plutôt que de se fier au rapport seul. Cas homogène φ'=30° (Ka=0.3333, Kp=3.0), c'=0,
+γ=18 kN/m³, amont cote 100, fond de fouille 97 :
+- Cote 90 : σ'v,amont = 18×10 = 180 kPa → Pa = 0.3333×180 = **60.00 kPa** ✓ ;
+  σ'v,aval = 18×7 = 126 kPa → Pp = 3.0×126 = **378.00 kPa** ✓.
+- Cote 98 (au-dessus du fond de fouille, côté aval excavé) : Pp forcé à **0** conforme au
+  code (`cote <= coteFondFouille` faux) ✓ ; σ'v,amont = 18×2 = 36 kPa → Pa = 0.3333×36 =
+  **12.00 kPa** ✓.
+
+Algèbre conforme à EN 1997-1 Annexe C / §8.2 du CDC, amont et aval bien découplés (deux
+appels indépendants à `calculerProfilContraintes`, hydrogéologies distinctes), coupure de
+traction et `Pp=0` au-dessus de fouille correctement implémentées. Rien à corriger — la
+brique est saine, la phase 4 peut être envoyée.
+
+*(Note héritée, pas une régression de cette livraison : `calculerCoefficientsPousseeButee`
+plafonne déjà `Kp` de Coulomb côté `delta` élevé — §8.2 du CDC — mais sans avertissement
+utilisateur explicite quand le plafond s'active. Le chemin Rankine (`delta=0`, seul utilisé
+par T_PRESS.1 et par la spec phase 4 ci-dessous) n'est pas concerné. À traiter si `delta`
+d'interface est un jour exposé en phase 4.)*
+
 ---
 
-## Tâche suivante (après §8.2) : Phase 4 — paroi phasée
+## Tâche suivante : Phase 4 — paroi phasée
 
-Préparée à l'avance pour être prête dès que la brique §8.2 ci-dessus est livrée et validée —
-**ne pas envoyer à Gemini avant**, cette tâche en dépend directement (`calculerProfilPressionLimite`).
-C'est « le morceau de bravoure » du projet au sens du CDC (§8.4) : à lire en entier avant de
-commencer, ne pas improviser sur les points signalés « Exigence critique » ou « Simplification ».
+§8.2 est livrée et revue ci-dessus. C'est « le morceau de bravoure » du projet au sens du
+CDC (§8.4) : à lire en entier avant de commencer, ne pas improviser sur les points signalés
+« Exigence critique » ou « Simplification ».
 
-Copier tel quel dans la session AI Studio, une fois §8.2 en main.
+Prête à copier telle quelle dans la session AI Studio.
 
 ---
 
@@ -278,9 +298,9 @@ calcul revu et validé), la dérivation pressiométrique de `kh`.
 
 Dans l'ordre, une tâche Gemini à la fois, chacune revue et testée avant la suivante :
 
-1. **Phase 4 — paroi phasée** (spec complète ci-dessus, « Tâche suivante (après §8.2) ») —
-   §8.2 est livrée et sera revue avant l'envoi de cette tâche. L'onglet UI est explicitement
-   hors scope de cette tâche, à traiter séparément une fois le moteur de calcul revu.
+1. **Phase 4 — paroi phasée** (spec complète ci-dessus, « Tâche suivante ») — §8.2 livrée et
+   revue, prête à envoyer à Gemini. L'onglet UI est explicitement hors scope de cette tâche,
+   à traiter séparément une fois le moteur de calcul revu.
 2. **Phase 5 — Module B transversal** (`src/modules/pieux/comportementTransversal.ts`) :
    courbes p-y (Matlock argiles molles, Reese sables), même solveur, convergence Newton sur
    raideur sécante.
