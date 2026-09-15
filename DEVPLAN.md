@@ -46,7 +46,7 @@ traitée en parallèle, ne dépend de rien d'autre.
 | 3 | Module B : pieu axial isolé puis groupe | ⚠️ Isolé validé (T3.1) ; **groupe de pieux (§7.6) non vérifié** — à confirmer avant de considérer la phase 3 close |
 | — | Brique §9.3 solveur matriciel | ✅ Durci et validé (13/13 T_SOLV.1-6) |
 | — | Brique §8.2 profil de pression limite | ✅ Livrée et revue par Claude (14/14, T_PRESS.1) |
-| 4 | Module C niveau 2 : phasage et coefficient de réaction | ✅ Livrée par Gemini, **bug de double-comptage corrigé par Claude**, 18/18 revalidés — onglet UI restant |
+| 4 | Module C niveau 2 : phasage et coefficient de réaction | ✅ Moteur + onglet UI livrés, revus par Claude (bug de double-comptage corrigé), 18/18 validés |
 | 5 | Module B transversal : courbes de réaction p-y | ❌ Non commencé |
 | 6 | Stabilité générale + hydraulique | 🟡 En avance, non finalisé (à confronter aux tests §12.6) |
 | 7 | Radier sur ressorts itératifs, export structural | ❌ Non commencé |
@@ -277,6 +277,17 @@ Livré et validé :
 2. **Intégration dans `src/components/OngletSoutenement.tsx`** :
    - Sélecteur de niveau de modélisation : **Niveau 2 (Paroi flexible phasée)** et **Niveau 1 (Mur rigide en L)**.
    - Mise à jour du libellé dans `src/App.tsx`.
+
+**Revue Claude (2026-09-15) :** `tsc --noEmit`, `npm run test:acceptance` (18/18, moteur non
+modifié par cette livraison) et `npm run build` ré-exécutés indépendamment, tous propres.
+Lecture du composant côté câblage numérique (le plus à risque, une UI ne fait que ce que le
+moteur lui donne) : `calculerParoiPhasee` reçoit bien `khParCouche`/`appuis`/`phases` depuis
+l'état du formulaire sans transformation intermédiaire, `mobilisationButeeMax` et les
+réactions d'appuis affichées viennent directement des champs calculés par le moteur (pas de
+recalcul dupliqué côté UI qui pourrait diverger). Intégration dans `OngletSoutenement.tsx`
+non invasive : le mur en L (niveau 1) reste inchangé, simplement déplacé derrière l'onglet
+« Niveau 1 ». Pas de revue pixel-près des diagrammes SVG (risque visuel, pas de sécurité) —
+à vérifier à l'usage. `package-lock.json` régénéré (scaffold AI Studio, 4ᵉ occurrence).
 
 ---
 
