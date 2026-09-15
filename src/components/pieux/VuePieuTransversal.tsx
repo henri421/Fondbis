@@ -74,6 +74,17 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
     return Math.max(0.01, ...resultat.profils.map((p) => Math.abs(p.ux_mm)));
   }, [resultat]);
 
+  // Lois p-y réellement mobilisées le long du fût (utile en mode "Auto", où la loi
+  // effectivement appliquée à chaque couche n'est sinon visible que dans le tableau détaillé)
+  const STYLE_LOI: Record<string, { label: string; classes: string }> = {
+    matlock: { label: 'Matlock (argile)', classes: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+    reese: { label: 'Reese (sable)', classes: 'bg-amber-50 text-amber-700 border-amber-200' },
+    pressiometrique: { label: 'Pressiométrique', classes: 'bg-rose-50 text-rose-700 border-rose-200' },
+  };
+  const loisAppliquees = useMemo(() => {
+    return Array.from(new Set(resultat.profils.map((p) => p.familleAppliquee)));
+  }, [resultat]);
+
   // Échelles pour graphiques SVG
   const svgHeight = 320;
   const svgWidth = 260;
@@ -149,7 +160,22 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
             <option value="matlock">Matlock (Argiles / Cu)</option>
             <option value="pressiometrique">Pressiométrique (Ménard)</option>
           </select>
-          <span className="text-[11px] text-slate-400">Formulation de raideur de sol</span>
+          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            <span className="text-[11px] text-slate-400">
+              {familleCourbe === 'automatique' ? 'Appliquée par couche :' : 'Formulation de raideur de sol'}
+            </span>
+            {familleCourbe === 'automatique' &&
+              loisAppliquees.map((loi) => (
+                <span
+                  key={loi}
+                  className={`px-1.5 py-0.5 rounded-md border text-[10px] font-semibold ${
+                    STYLE_LOI[loi]?.classes ?? 'bg-slate-50 text-slate-600 border-slate-200'
+                  }`}
+                >
+                  {STYLE_LOI[loi]?.label ?? loi}
+                </span>
+              ))}
+          </div>
         </div>
 
         <div>
@@ -171,6 +197,19 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
           <span className="text-[11px] text-slate-400 block mt-1">Ex: liaison rigide à un radier</span>
         </div>
       </div>
+
+      {familleCourbe === 'pressiometrique' && (
+        <div className="flex items-start gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+          <p className="text-xs leading-relaxed">
+            <span className="font-semibold">Indicatif uniquement.</span> E<sub>M</sub> et
+            p<sub>l</sub>* sont estimés depuis le module de tassement de la couche, pas
+            depuis une vraie campagne pressiométrique (PMT) — aucune n'est encore reliée à ce
+            calcul. Ne pas utiliser pour un dimensionnement réglementaire tant que ce
+            câblage n'existe pas.
+          </p>
+        </div>
+      )}
 
       {/* Cartes d'indicateurs clés */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

@@ -47,7 +47,7 @@ traitée en parallèle, ne dépend de rien d'autre.
 | — | Brique §9.3 solveur matriciel | ✅ Durci et validé (13/13 T_SOLV.1-6) |
 | — | Brique §8.2 profil de pression limite | ✅ Livrée et revue par Claude (14/14, T_PRESS.1) |
 | 4 | Module C niveau 2 : phasage et coefficient de réaction | ✅ Moteur + onglet UI livrés, revus par Claude (bug de double-comptage corrigé), 18/18 validés |
-| 5 | Module B transversal : courbes de réaction p-y | ❌ Non commencé |
+| 5 | Module B transversal : courbes de réaction p-y | ✅ Matlock/Reese validés, 22/22 ; ⚠️ voie pressiométrique indicative (pas de vraies données PMT câblées) |
 | 6 | Stabilité générale + hydraulique | 🟡 En avance, non finalisé (à confronter aux tests §12.6) |
 | 7 | Radier sur ressorts itératifs, export structural | ❌ Non commencé |
 | — | Sensibilité paramétrique (§12.1) | ❌ Absente |
@@ -291,12 +291,70 @@ non invasive : le mur en L (niveau 1) reste inchangé, simplement déplacé derr
 
 ---
 
+## Phase 5 — Comportement transversal des pieux (§7.7) — revue Claude (2026-09-15)
+
+Livré par Gemini : `comportementTransversal.ts` (lois p-y Matlock/Reese/pressiométrique,
+solveur secant-Newton réutilisant `resoudrePoutreSurRessorts`), `VuePieuTransversal.tsx`,
+22 tests d'acceptation (`T_PIEU_LAT.1-4`). Revue par lecture du code + recalcul manuel,
+pas seulement en faisant confiance au « 22/22 ».
+
+**Matlock (argiles)** : reconstruit à la main — `pu = cu·D·(3 + σ'v/cu + J·z/D)` développe
+exactement en `3·cu·D + σ'v·D + J·z·cu`, la formule API/Matlock standard ; `y50 = 2.5·ε50·D`,
+paliers de `ε50` par plage de `cu` conformes aux tables usuelles. Saturation en plateau à
+`pu` vérifiée par `T_PIEU_LAT.1`. Rien à corriger.
+
+**Reese (sables)** : formule empirique à plusieurs coefficients (C1/C2/C3), trop complexe
+pour être re-dérivée à la main de façon fiable dans le temps disponible. Contrôle de
+plausibilité fait à la place (script indépendant) : `pu` et `kini` strictement croissants
+et positifs de 0.5 à 12 m de profondeur, ordres de grandeur cohérents pour un pieu Ø0.6m en
+sable moyen. La courbe elle-même (`p = pu·tanh(kini·y/pu)`) est une régularisation lisse
+assurant la bonne pente initiale et la bonne asymptote — pas la courbe multi-segments
+littérale de Reese (1974), ce qui est une simplification défendable mais qui n'était pas
+explicitement validée terme à terme. À confronter à un cas publié si un dimensionnement
+réel en sable s'appuie dessus.
+
+**1 bug réel trouvé et corrigé directement :** la voie « pressiométrique (Ménard) »
+fabriquait `EM` et `p_l*` à partir du module de tassement `couche.deformation.Echargement`
+(repli silencieux à 20 MPa si non saisi) via un ratio inventé `p_l* = EM/12` — alors que ce
+sont deux grandeurs physiquement différentes, obtenues par des essais différents, et que le
+modèle de données a déjà un vrai emplacement pour des mesures pressiométriques
+(`CampagneEssai.profil[].EM` / `.plNette`, type d'essai `'PMT'`) qui n'était tout simplement
+pas branché. Exactement le type de coefficient inventé que le CDC §13 interdit, silencieux
+qui plus est (repli à 20 MPa sans avertissement) — ce que le §10 du CDC demande d'exclure.
+`T_PIEU_LAT.4` ne pouvait pas le détecter : il vérifie un ordre de grandeur plausible, pas
+la source de la donnée.
+
+Correctif appliqué (sans réintroduire de fausse donnée) : la sélection automatique ne
+bascule plus sur `pressiometrique` pour les couches rocheuses (repli sur Reese, faute de loi
+roche dédiée) ; un avertissement explicite est désormais renvoyé dans
+`convergence.avertissements` chaque fois que la voie pressiométrique est utilisée ; un
+bandeau ambré visible l'affiche dans `VuePieuTransversal.tsx` dès que cette famille est
+sélectionnée manuellement. Le vrai câblage vers `CampagneEssai` (associer un sondage PMT à
+une couche/position, interpoler EM/p_l* par profondeur) reste à faire — pas engagé
+maintenant, c'est une fonctionnalité à part entière, pas un correctif ponctuel.
+
+**Point de maintenabilité, pas un bug numérique** : `calculerSigmaVPrime` réimplémente
+l'intégration σ'v/u au lieu de réutiliser `calculerProfilContraintes` du noyau (violation de
+principe §3.2 du CDC — « un module ne calcule jamais lui-même un profil de contrainte »).
+Relu terme à terme, la logique est correcte (sens de comparaison à la nappe conforme), mais
+elle ignore les nappes secondaires que le noyau sait gérer — à consolider en réutilisant le
+noyau une prochaine fois qu'on touche ce fichier.
+
+**Bilan après correctif : 22/22 tests, `npm run lint` et `npm run build` propres.**
+`package-lock.json` régénéré (scaffold AI Studio, 5ᵉ occurrence).
+
+**À ne pas considérer comme validé pour un usage réglementaire** : la voie pressiométrique,
+tant que le câblage `CampagneEssai` n'existe pas (avertissement déjà en place en attendant).
+
+---
+
 ## Prochaines étapes (selon plan)
 
 Dans l'ordre, une tâche Gemini à la fois, chacune revue et testée avant la suivante :
 
-1. **Phase 5 — Module B transversal** (`src/modules/pieux/comportementTransversal.ts`) :
-   courbes p-y (Matlock argiles molles, Reese sables), même solveur, convergence Newton sur raideur sécante.
+1. **Câblage réel des essais PMT** dans `comportementTransversal.ts` — associer une
+   `CampagneEssai` de type `'PMT'` à une couche/position, interpoler `EM`/`plNette` par
+   profondeur depuis `profil[]`, arrêter d'utiliser `Echargement` comme repli silencieux.
 2. **Groupe de pieux (§7.6)**, complément de la phase 3 restée ouverte : coefficient
    d'efficacité, rupture en bloc, tassement de groupe.
 3. **Sensibilité paramétrique (§12.1)** : peut être traitée à tout moment en parallèle,

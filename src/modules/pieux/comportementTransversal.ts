@@ -249,6 +249,18 @@ export function evaluerPyReese(
 /**
  * Approche pressiométrique alternative (Ménard / NF P 94-262 Annexe M)
  * EN 1997-1 §7.7
+ *
+ * ATTENTION — limitation connue (revue Claude 2026-09-15) : cette fonction attend EM et
+ * plStar comme de VRAIES valeurs pressiométriques (module Ménard et pression limite nette,
+ * en kPa). `CoucheGeotechnique` ne porte pas ces champs aujourd'hui ; seules les véritables
+ * campagnes d'essai de type PMT (`CampagneEssai.profil[].EM` / `.plNette`) les contiennent,
+ * et rien ne relie encore une couche à son sondage. L'appelant `evaluerReactionSolPy` ne
+ * doit JAMAIS synthétiser EM/plStar à partir d'un autre module (ex. le module de tassement
+ * `Echargement`, qui n'a aucun rapport physique avec un essai pressiométrique) — ce serait
+ * exactement le type de coefficient inventé que le CDC §13 interdit. Tant que le câblage
+ * réel vers `CampagneEssai` (type PMT) n'existe pas, cette famille ne doit être utilisable
+ * qu'en saisie manuelle explicite d'EM/plStar par l'utilisateur, jamais en sélection
+ * automatique ni avec une valeur de repli silencieuse.
  */
 export function evaluerPyPressiometrique(
   y: number,
@@ -302,9 +314,11 @@ export function evaluerReactionSolPy(
       typeCalcul = 'reese';
     } else if (couche.nature === 'argile' || couche.nature === 'limon') {
       typeCalcul = 'matlock';
-    } else if (couche.nature === 'roche') {
-      typeCalcul = 'pressiometrique';
     } else {
+      // 'roche' inclus : pas de loi p-y roche dédiée pour l'instant, et la voie
+      // pressiométrique n'est volontairement jamais choisie automatiquement (voir
+      // evaluerPyPressiometrique) — Reese reste l'approximation la moins mauvaise en
+      // sélection automatique tant qu'aucune loi roche n'est spécifiée.
       typeCalcul = 'reese';
     }
   }
@@ -525,6 +539,12 @@ export function calculerPieuTransversal(
       converge = true;
       break;
     }
+  }
+
+  if (familleCourbe === 'pressiometrique') {
+    avertissements.push(
+      "Voie pressiométrique : EM et p_l* sont estimés à partir du module de tassement de la couche (Echargement/12), PAS de vraies mesures PMT — aucune campagne d'essai pressiométrique n'est encore reliée au calcul. Résultat indicatif uniquement, ne pas utiliser pour un dimensionnement réglementaire tant que ce câblage n'est pas fait."
+    );
   }
 
   if (!converge) {
