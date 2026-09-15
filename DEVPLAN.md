@@ -43,11 +43,11 @@ traitée en parallèle, ne dépend de rien d'autre.
 | 0 | Noyau : stratigraphie, nappe, profil de contraintes, config normative | ✅ Validé (T0.1, T0.2) |
 | 1 | Module A : radier, portance ELU, glissement, tassement ELS | ✅ Validé (T1.1-T1.3), UPL/HYD inclus |
 | 2 | Module C niveau 1 : mur en L | ✅ Validé (T2.1) |
-| 3 | Module B : pieu axial isolé puis groupe | ⚠️ Isolé validé (T3.1) ; **groupe de pieux (§7.6) non vérifié** — à confirmer avant de considérer la phase 3 close |
+| 3 | Module B : pieu axial isolé puis groupe | ✅ Isolé (T3.1) et groupe (T3.2 — efficacité, bloc, tassement) validés |
 | — | Brique §9.3 solveur matriciel | ✅ Durci et validé (13/13 T_SOLV.1-6) |
 | — | Brique §8.2 profil de pression limite | ✅ Livrée et revue par Claude (14/14, T_PRESS.1) |
 | 4 | Module C niveau 2 : phasage et coefficient de réaction | ✅ Moteur + onglet UI livrés, revus par Claude (bug de double-comptage corrigé), 18/18 validés |
-| 5 | Module B transversal : courbes de réaction p-y | ✅ Matlock/Reese validés, 22/22 ; ⚠️ voie pressiométrique indicative (pas de vraies données PMT câblées) |
+| 5 | Module B transversal : courbes de réaction p-y | ✅ Matlock/Reese/pressiométrique (PMT réel) validés, 24/24 |
 | 6 | Stabilité générale + hydraulique | 🟡 En avance, non finalisé (à confronter aux tests §12.6) |
 | 7 | Radier sur ressorts itératifs, export structural | ❌ Non commencé |
 | — | Sensibilité paramétrique (§12.1) | ❌ Absente |
@@ -352,20 +352,53 @@ tant que le câblage `CampagneEssai` n'existe pas (avertissement déjà en place
 
 Dans l'ordre, une tâche Gemini à la fois, chacune revue et testée avant la suivante :
 
-1. **Câblage réel des essais PMT** dans `comportementTransversal.ts` — associer une
-   `CampagneEssai` de type `'PMT'` à une couche/position, interpoler `EM`/`plNette` par
-   profondeur depuis `profil[]`, arrêter d'utiliser `Echargement` comme repli silencieux.
-2. **Groupe de pieux (§7.6)**, complément de la phase 3 restée ouverte : coefficient
-   d'efficacité, rupture en bloc, tassement de groupe.
-3. **Sensibilité paramétrique (§12.1)** : peut être traitée à tout moment en parallèle,
+1. **Sensibilité paramétrique (§12.1)** : peut être traitée à tout moment en parallèle,
    indépendante du solveur — dérivée numérique sur les paramètres de sol principaux, affichage
    de la dispersion à côté de chaque résultat.
-4. **Phase 6, finalisation** : recherche automatique du cercle critique (grille de centres/
+2. **Phase 6, finalisation** : recherche automatique du cercle critique (grille de centres/
    rayons + raffinement local, déjà en partie présente) et écoulement/réseau simplifié,
    confrontés aux cas de référence publiés (§12.6 — liste à obtenir de l'ingénieur).
-5. **Phase 7** : radier sur ressorts itératifs (§6.6, boucle décrite dans le CDC, réutilise le
+3. **Phase 7** : radier sur ressorts itératifs (§6.6, boucle décrite dans le CDC, réutilise le
    solveur de plaque à mutualiser avec la brique matricielle), export vers les modules
    structuraux (format d'échange à définir avec Aedificium/Structura).
+
+## Groupe de pieux (§7.6) — revue Claude (2026-09-15)
+
+Livré par Gemini avec le câblage PMT ci-dessus, dans le même commit : `comportementGroupe.ts`
+(efficacité Converse-Labarre, rupture en bloc, tassement de groupe Terzaghi/Peck + Poulos),
+intégré dans `OngletPieux.tsx`. Test `T3.2` ajouté et 22 autres tests re-passés.
+
+**Converse-Labarre re-dérivé à la main** sur le cas du test (2×2, d=0.8m, s=2.4m) :
+θ=arctan(0.8/2.4)=18.435°, η=1−(18.435/90)·[(2−1)·2+(2−1)·2]/(2·2)=1−0.2048=0.795 — exact,
+conforme à `T3.2`. Dimensions de bloc (3.2×3.2 m) et condition `s_groupe > s_isole` également
+vérifiées à la main sur la géométrie du test. Rien à corriger sur la vérification ELU
+gouvernante (bloc vs individuel avec efficacité — le minimum des deux gouverne, correct).
+
+**1 bug réel trouvé et corrigé directement :** `calculerEfficaciteSayedBakeer` calculait une
+valeur `eta` puis l'ignorait complètement, retournant à la place une expression sans aucun
+rapport (`1 − 0.6/ratio`, bornée) — variable morte, code mort inatteignable par erreur de
+copier-coller manifeste. Sans conséquence sur la vérification ELU (cette valeur est purement
+comparative/informative, n'alimente ni `Rc_d_groupe` ni `conformeELU`, et n'a pas de test
+associé — c'est d'ailleurs pour ça que `T3.2` ne l'a pas détecté). Corrigé pour retourner la
+valeur réellement calculée ; commentaire ajouté rappelant que cette formule secondaire reste
+non vérifiée indépendamment (pas de référence croisée trouvée pour confirmer qu'il s'agit
+bien de la formule de Sayed & Bakeer 1992 telle que publiée).
+
+**Câblage PMT (tâche précédente) confirmé correct** : `interpolerValeursPMT` respecte l'ordre
+de priorité attendu (saisie manuelle > sondage PMT interpolé par profondeur > aucune donnée
+→ `null`), et `evaluerReactionSolPy` replie proprement sur Matlock/Reese sans plus jamais
+fabriquer EM/p_l* — nouveau test `T_PIEU_LAT.5` dédié à ce garde-fou, en plus de `T_PIEU_LAT.4`
+qui utilise maintenant une vraie `CampagneEssai`. `calculerSigmaVPrime` a aussi été remplacé
+par un appel au noyau (`calculerProfilContraintes`), qui corrige le point de maintenabilité
+soulevé dans la revue précédente.
+
+**Non revu en détail (budget de revue, risque plus faible)** : restylage visuel de
+`CoupeDeSolCanvas.tsx` (thème sombre → clair, nouvelles hachures limon/roche) — cosmétique,
+sans lien évident avec le groupe de pieux ou le PMT, scope non demandé mais inoffensif ; à
+confirmer que le rendu plaît toujours à l'usage.
+
+**Bilan : 24/24 tests, lint et build propres.** `package-lock.json` régénéré (scaffold AI
+Studio, 6ᵉ occurrence).
 
 ## Wiring restant (hors code de calcul)
 

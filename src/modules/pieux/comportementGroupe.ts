@@ -101,7 +101,15 @@ export function calculerEfficaciteConverseLabarre(
 }
 
 /**
- * Formule alternative d'efficacité de groupe de Sayed & Bakeer (1992)
+ * Formule alternative d'efficacité de groupe de Sayed & Bakeer (1992).
+ *
+ * NOTE (revue Claude 2026-09-15) : la valeur `eta` calculée ci-dessous était auparavant
+ * ignorée — la fonction retournait une expression totalement déconnectée (bug de type
+ * variable morte). Corrigé pour retourner la valeur réellement calculée. Cette formule
+ * reste une comparaison indicative à `efficaciteConverseLabarre`, affichée à titre
+ * informatif seulement : elle n'alimente ni Rc_k_groupe/Rc_d_groupe ni conformeELU (seule
+ * Converse-Labarre gouverne la vérification ELU) et n'a pas de test d'acceptation associé —
+ * ne pas la citer comme référence normative sans revérification.
  */
 export function calculerEfficaciteSayedBakeer(
   m: number,
@@ -113,7 +121,7 @@ export function calculerEfficaciteSayedBakeer(
   const ratio = s / Math.max(0.1, d);
   // Pour s/d >= 4, eta -> 1.0
   const eta = 1 - (1 - Math.pow(ratio / 4, 2)) * (1 / (m * n));
-  return Math.max(0.4, Math.min(1.0, Math.max(0.5, 1 - 0.6 / ratio)));
+  return Math.max(0.4, Math.min(1.0, eta));
 }
 
 /**
