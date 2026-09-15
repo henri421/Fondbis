@@ -33,11 +33,15 @@ export function construireMaillageVertical(params: MaillageVerticalParams): numb
   }
 
   // Nappes
-  pointsClefs.add(Number(hydrogeologie.nappePrincipale.coteCaracteristique.toFixed(3)));
-  pointsClefs.add(Number(hydrogeologie.nappePrincipale.coteDefavorableELU.toFixed(3)));
+  if (hydrogeologie?.nappePrincipale) {
+    pointsClefs.add(Number(hydrogeologie.nappePrincipale.coteCaracteristique.toFixed(3)));
+    pointsClefs.add(Number(hydrogeologie.nappePrincipale.coteDefavorableELU.toFixed(3)));
+  }
 
-  for (const n of hydrogeologie.nappesSecondaires) {
-    pointsClefs.add(Number(n.cotePiezometrique.toFixed(3)));
+  if (hydrogeologie?.nappesSecondaires) {
+    for (const n of hydrogeologie.nappesSecondaires) {
+      pointsClefs.add(Number(n.cotePiezometrique.toFixed(3)));
+    }
   }
 
   // Cotes d'ouvrages

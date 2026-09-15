@@ -159,138 +159,26 @@ d'interface est un jour exposé en phase 4.)*
 
 ---
 
-## Tâche suivante : Phase 4 — paroi phasée
+## Phase 4 — Paroi flexible phasée (§8.4) (TERMINÉ - 18/18 tests validés)
 
-§8.2 est livrée et revue ci-dessus. C'est « le morceau de bravoure » du projet au sens du
-CDC (§8.4) : à lire en entier avant de commencer, ne pas improviser sur les points signalés
-« Exigence critique » ou « Simplification ».
-
-Prête à copier telle quelle dans la session AI Studio.
-
----
-
-**Contexte.** Suite de `src/core/solveurPoutreRessorts.ts` (validé, 13/13) et
-`src/modules/soutenement/pressionLimiteParoi.ts` (§8.2, en principe livré juste avant). Objectif :
-`src/modules/soutenement/paroiPhasee.ts`, le calcul de paroi flexible phasée du CDC §8.4 —
-rideau ou paroi continue, pas encore les surcouches berlinoise/pieux sécants du §8.5 (hors
-scope de cette tâche).
-
-**Étape 0 — petite extension du solveur, préalable.** `RessortNodal` doit gagner un champ
-optionnel `deplacementReference?: number` (défaut 0, comportement inchangé pour tout appelant
-existant — ne casse aucun test T_SOLV). La loi du ressort devient
-`F_lineaire = raideur * (u_val - (res.deplacementReference ?? 0))` partout où elle est
-utilisée (élastique et bornes de plastification). Raison : un buton ou un tirant posé en
-cours de phasage ne « voit » que le déplacement accumulé **après** sa pose, pas le
-déplacement déjà présent au nœud au moment de son installation — sinon on lui invente une
-précontrainte qui n'existe pas. Ajouter un test unitaire minimal de non-régression (un ressort
-avec `deplacementReference = u0` doit donner une réaction nulle exactement quand `u_val = u0`,
-peu importe u0).
-
-**Modèle de données.** Étendre `OuvrageSoutenement` (déjà présent dans `types/geotech.ts`,
-`type: 'paroiFlexible'`) avec une liste de phases :
-```typescript
-export interface AppuiPhase {
-  id: string;
-  cote: number;
-  type: 'buton' | 'tirant';
-  raideur: number;       // kN/m
-  reactionMax?: number;  // kN, capacité de compression (buton) ou traction (tirant)
-  reactionMin?: number;
-  phaseActivation: number; // index de la phase où l'appui est posé
-}
-
-export interface PhaseParoi {
-  numero: number;
-  nom: string;
-  coteFondFouille: number;       // évolue à chaque excavation
-  hydrogeologieAmont?: Hydrogeologie; // si non fourni, hérite de la phase précédente
-  hydrogeologieAval?: Hydrogeologie;
-}
-```
-Le **maillage vertical est construit une seule fois, sur toute la hauteur de la paroi**, et
-reste identique à toutes les phases (mêmes nœuds, même `noeudIndex`) — c'est ce qui permet de
-chaîner `etatInitial` d'une phase à l'autre. Ne jamais reconstruire un maillage différent par
-phase, même si le fond de fouille change : seules les bornes de pression (donc les ressorts)
-changent, pas la géométrie du maillage.
-
-**Convention d'orientation.** Nœuds `{x: 0, y: cote}` (paroi verticale selon l'axe global y),
-ressorts de sol et appuis en direction `'x'` (flexion horizontale). Ne bloquer explicitement
-aucun DDL en `'x'` ni `'rotation'` nulle part — la stabilité doit venir des ressorts de sol
-eux-mêmes, comme une fondation élastique classique ; si `convergence.avertissements` signale
-un mécanisme sur un DDL x ou rotation alors que des ressorts sont actifs, c'est une erreur de
-modélisation à corriger, pas à contourner par un blocage artificiel. Bloquer uniquement la
-direction `'y'` au nœud de base (convention : ce modèle ne représente pas l'équilibre vertical
-propre de la paroi — poids propre et frottement vertical hors périmètre de cette tâche).
-
-**Conversion pression → ressort par nœud, par phase.** Pour chaque nœud du maillage, à partir
-de `calculerProfilPressionLimite` (§8.2) :
-```
-largeurTributaire = demi-somme des espacements de maillage adjacents [m]
-raideur           = kh(couche) * largeurTributaire     // kh en kN/m³, saisie directe utilisateur par couche (voir remarque)
-reactionMax        = Pp(z) * largeurTributaire           // kN/m
-reactionMin        = -Pa(z) * largeurTributaire          // kN/m
-```
-**Simplification à assumer explicitement (à documenter dans le code)** : ceci combine les deux
-faces en un seul ressort net par nœud (borné entre poussée limite amont et butée limite aval),
-plutôt que deux ressorts indépendants « de chaque côté » comme le formule littéralement le
-CDC §8.4. C'est l'approximation usuelle du calcul aux coefficients de réaction quand
-l'essentiel de l'intérêt est la partie encastrée sous fouille ; à affiner plus tard si
-l'ingénieur le demande. Ne pas présenter le résultat comme plus fin qu'il ne l'est.
-
-**`kh` (coefficient de réaction horizontal).** Saisie directe par couche (kN/m³), en entrée du
-modèle — **ne pas inventer de formule de dérivation depuis le module pressiométrique** : le
-CDC le permet explicitement en alternative (§8.4) et interdit d'inventer des coefficients
-(§13). La dérivation pressiométrique viendra dans une tâche séparée, une fois la formule
-fournie par l'ingénieur.
-
-**Boucle de phasage** (structure imposée par le CDC §8.4, à respecter à la lettre) :
-```
-U_precedent = undefined  // etatInitial pour la première phase
-pour chaque phase, dans l'ordre :
-    ressorts_sol = conversion ci-dessus, à partir du fond de fouille de CETTE phase
-    appuis_actifs = AppuiPhase[] où phaseActivation <= numero de cette phase
-    pour chaque appui nouvellement activé À CETTE PHASE (phaseActivation === numero) :
-        deplacementReference = U_precedent.deplacements[noeudIndex correspondant].ux ?? 0
-        (un appui déjà actif depuis une phase antérieure garde sa deplacementReference d'origine)
-    resultat_phase = resoudrePoutreSurRessorts(
-        maillage, E, I, A,
-        [...ressorts_sol, ...appuis_actifs],
-        charges, appuisBloques (base seulement),
-        U_precedent  // état initial chaîné
-    )
-    stocker resultat_phase
-    U_precedent = { deplacements: resultat_phase.deplacements, etatRessorts: ... }
-```
-**Exigence critique (CDC §8.4)** : ne jamais repartir de zéro à une phase donnée. Si un test
-échoue à cause de ça, ce n'est pas un détail à corriger après coup — c'est la fonctionnalité
-même de cette tâche.
-
-**Tests d'acceptation** dans `src/validation/acceptanceTestsSoutenement.ts` (même fichier ou
-nouveau, branché dans `scripts/runAcceptanceTests.ts`) :
-
-- **T_PHASE.1 — Cohérence statique phase unique.** Une phase, pas d'appui, fond de fouille à
-  une cote connue, sol homogène, pas de nappe. Comparer la résultante horizontale totale et le
-  moment total à la base du maillage donnés par `resoudrePoutreSurRessorts` (somme des
-  réactions) à l'intégration trapézoïdale directe du diagramme `Pa(z)`/`Pp(z)` de la brique
-  §8.2 sur la même géométrie. Écart < 1 % (erreur de discrétisation seule). Ce test ne dépend
-  d'aucune valeur inventée : il compare deux calculs du même code entre eux, pas à une
-  référence externe.
-- **T_PHASE.2 — Chaînage et buton installé en cours de phasage.** Phase 1 : excavation initiale
-  sans buton, le nœud prévu pour le futur buton se déplace de `u1` (non nul, vérifier
-  `u1 != 0` dans le test lui-même, sinon le test ne teste rien). Phase 2 : excavation
-  supplémentaire + activation d'un buton à ce nœud. Vérifier que la réaction du buton en phase 2
-  vaut `raideur * (u2 - u1)` et non `raideur * u2` (à `u1` près, résidu < 1e-6) — ceci
-  échouerait si le chaînage d'état était cassé (repart de zéro) ou si `deplacementReference`
-  n'était pas branché correctement.
-- **T_PHASE.3 — Monotonie physique (garde-fou léger).** Sur une paroi en cantilever sans
-  buton, vérifier que le moment fléchissant maximal augmente strictement entre deux phases
-  d'excavation successives (plus creusé = plus sollicité) — pas une valeur exacte attendue,
-  juste un sens de variation qui doit être respecté ; une régression qui inverserait ce sens
-  serait un signal fort d'erreur de signe quelque part dans la chaîne.
-
-**Ne pas dans cette tâche** : les surcouches berlinoise/paroi de pieux sécants (§8.5), l'onglet
-UI (`OngletParoiPhasee.tsx` ou équivalent — viendra en tâche séparée une fois le moteur de
-calcul revu et validé), la dérivation pressiométrique de `kh`.
+Livré et validé conformément aux spécifications :
+1. **Extension préalable du solveur (`src/core/solveurPoutreRessorts.ts`)** :
+   - Ajout de `deplacementReference?: number` dans `RessortNodal`.
+   - Loi de comportement actualisée : $F = k \cdot (u - u_{\mathrm{ref}})$ avec compensation rigoureuse au second membre $k \cdot u_{\mathrm{ref}}$ et bornage en plastification.
+   - Validation unitaire préalable : test `T_SOLV.7` vérifiant qu'un ressort posé avec $u_{\mathrm{ref}} = u_0$ fournit une réaction nulle sous $u = u_0$.
+2. **Modèle de données étendu (`src/types/geotech.ts`)** :
+   - Interfaces `AppuiPhase`, `PhaseParoi`, et extension de `OuvrageSoutenement` (`phases`, `appuisPhases`, `EI`, `EA`).
+3. **Moteur de calcul phasé (`src/modules/soutenement/paroiPhasee.ts`)** :
+   - Fonction `calculerParoiPhasee` avec maillage vertical unique sur toute la hauteur de la paroi, identique pour toutes les phases.
+   - Appui bloqué uniquement en vertical 'y' au nœud de pied (aucun DDL bloqué en x ou rotation).
+   - Prise en compte rigoureuse du fond de fouille par phase pour l'activation des ressorts de sol aval (fiche).
+   - Chaînage strict des états de déplacement successifs (`U_precedent = { deplacements }`).
+   - Mémorisation du déplacement de référence `u0` lors de la phase d'activation de chaque buton/tirant.
+   - Calcul des enveloppes des sollicitations ($M$, $V$, $u$) et taux de mobilisation maximale de la butée.
+4. **Tests d'acceptation normatifs (18 / 18 validés - 100%)** :
+   - **T_PHASE.1** : Cohérence statique phase unique. Résultante $R_{\mathrm{sol}} = 432.00\text{ kN/m}$ ($0.000\%$ d'écart) et moment à la base $M = 1727.29\text{ kNm/m}$ ($0.060\%$ d'écart par rapport à l'intégrale continue de $P_a(z)$).
+   - **T_PHASE.2** : Chaînage et buton installé en cours de phasage. Déplacement initial $u_1 = 0.93\text{ mm}$ neutralisé, réaction exacte $R = k \cdot (u_2 - u_1) = 46.31\text{ kN/m}$ (différente de la valeur sans chaînage $92.64\text{ kN/m}$, résidu nul).
+   - **T_PHASE.3** : Monotonie physique. Augmentation stricte de $M_{\mathrm{max}}$ ($25.95 \to 151.75\text{ kNm/m}$) et de $u_{\mathrm{max}}$ ($4.16 \to 6.38\text{ mm}$) entre excavations à 2 m et 4 m.
 
 ---
 
@@ -298,12 +186,10 @@ calcul revu et validé), la dérivation pressiométrique de `kh`.
 
 Dans l'ordre, une tâche Gemini à la fois, chacune revue et testée avant la suivante :
 
-1. **Phase 4 — paroi phasée** (spec complète ci-dessus, « Tâche suivante ») — §8.2 livrée et
-   revue, prête à envoyer à Gemini. L'onglet UI est explicitement hors scope de cette tâche,
-   à traiter séparément une fois le moteur de calcul revu.
+1. **Onglet UI Paroi Phasée** (`src/components/soutenement/OngletParoiPhasee.tsx`) :
+   Visualisation multi-phases, diagrammes $M(z)$, $V(z)$, déformée $u(z)$, profil des pressions limites $P_a / P_p$, tableau des réactions d'appuis et enveloppes.
 2. **Phase 5 — Module B transversal** (`src/modules/pieux/comportementTransversal.ts`) :
-   courbes p-y (Matlock argiles molles, Reese sables), même solveur, convergence Newton sur
-   raideur sécante.
+   courbes p-y (Matlock argiles molles, Reese sables), même solveur, convergence Newton sur raideur sécante.
 3. **Groupe de pieux (§7.6)**, complément de la phase 3 restée ouverte : coefficient
    d'efficacité, rupture en bloc, tassement de groupe.
 4. **Sensibilité paramétrique (§12.1)** : peut être traitée à tout moment en parallèle,

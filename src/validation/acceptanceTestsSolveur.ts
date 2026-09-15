@@ -383,5 +383,87 @@ export function executerTestsAcceptationSolveur(): TestResultatIndividuel[] {
     });
   }
 
+  // --------------------------------------------------------------------------
+  // T_SOLV.7 — Ressort avec déplacement de référence (installation phasée)
+  // --------------------------------------------------------------------------
+  {
+    // Poutre console sous charge initiale P = 50 kN produisant un déplacement u0 non nul
+    // Ajout d'un ressort au nœud d'extrémité avec deplacementReference = u0
+    // La réaction du ressort doit être rigoureusement nulle (0.000 kN) tant qu'aucun chargement supplémentaire n'est appliqué
+    const L = 5.0;
+    const E = 30e6;
+    const I = 0.001;
+    const A = 0.05;
+    const P = 50.0;
+    const kRessort = 10000.0; // kN/m
+
+    const noeuds: NoeudPoutre[] = [
+      { x: 0.0, y: 0.0 },
+      { x: L, y: 0.0 },
+    ];
+    const appuis: AppuiBloque[] = [
+      { noeudIndex: 0, direction: 'x' },
+      { noeudIndex: 0, direction: 'y' },
+      { noeudIndex: 0, direction: 'rotation' },
+    ];
+
+    // Phase 1 : flexion sous P sans ressort -> obtention de u0
+    const resPhase1 = resoudrePoutreSurRessorts(
+      noeuds,
+      E,
+      I,
+      A,
+      [],
+      [{ noeudIndex: 1, Fy: -P }],
+      appuis
+    );
+    const u0 = resPhase1.deplacements[1].uy;
+
+    // Phase 2 : même chargement P, ressort installé avec deplacementReference = u0
+    const ressortsPhase2: RessortNodal[] = [
+      {
+        noeudIndex: 1,
+        direction: 'y',
+        raideur: kRessort,
+        deplacementReference: u0,
+      },
+    ];
+
+    const resPhase2 = resoudrePoutreSurRessorts(
+      noeuds,
+      E,
+      I,
+      A,
+      ressortsPhase2,
+      [{ noeudIndex: 1, Fy: -P }],
+      appuis,
+      { deplacements: resPhase1.deplacements }
+    );
+
+    const reactionRessort = resPhase2.reactionsRessorts[0]?.reaction ?? -999;
+    const deplacementFinal = resPhase2.deplacements[1].uy;
+
+    const ecartReaction = Math.abs(reactionRessort);
+    const ecartDeplacement = Math.abs(deplacementFinal - u0);
+    const succes = Math.abs(u0) > 1e-4 && ecartReaction < 1e-6 && ecartDeplacement < 1e-6;
+
+    resultats.push({
+      id: 'T_SOLV.7',
+      nom: 'Ressort avec déplacement de référence (installation phasée)',
+      phase: 'Brique §9.3',
+      description:
+        'Vérification qu\'un ressort posé avec deplacementReference = u0 donne une réaction rigoureusement nulle sous u0 (pas de précontrainte parasite).',
+      valeurAttendue: 'R_ressort = 0.00 kN exactement quand u = u0',
+      valeurObtenue: `u0 = ${(u0 * 1000).toFixed(3)} mm, R_ressort = ${reactionRessort.toExponential(3)} kN`,
+      tolerance: 'Résidu réaction < 1e-6 kN',
+      ecartAbsolu: ecartReaction,
+      ecartPourcentage: 0,
+      succes,
+      message: succes
+        ? 'Réaction nulle sous u=u0 validée : loi du ressort F = k*(u - u0) conforme au phasage d\'appuis'
+        : 'Écart sur la réaction du ressort avec déplacement de référence',
+    });
+  }
+
   return resultats;
 }

@@ -187,6 +187,25 @@ export interface OuvragePieu {
   };
 }
 
+export interface AppuiPhase {
+  id: string;
+  cote: number;
+  type: 'buton' | 'tirant';
+  raideur: number; // kN/m
+  reactionMax?: number; // kN, capacité de compression (buton) ou traction (tirant)
+  reactionMin?: number;
+  phaseActivation: number; // index de la phase où l'appui est posé (commence à 1 ou 0)
+}
+
+export interface PhaseParoi {
+  numero: number;
+  nom: string;
+  coteFondFouille: number; // évolue à chaque excavation
+  hydrogeologieAmont?: Hydrogeologie; // si non fourni, hérite de la phase précédente / modèle
+  hydrogeologieAval?: Hydrogeologie;
+  surchargeQ_amont?: number; // surcharge additionnelle amont éventuelle
+}
+
 export interface OuvrageSoutenement {
   id: string;
   nom: string;
@@ -202,6 +221,11 @@ export interface OuvrageSoutenement {
   inclinaisonTerrePlein: number; // deg
   frottementDeltaSurPhi: number; // ex: 0.667
   butons: Array<{ cote: number; raideur: number }>;
+  // Extension Phase 4 : Paroi phasée
+  phases?: PhaseParoi[];
+  appuisPhases?: AppuiPhase[];
+  EI?: number; // kN.m² rigidité de flexion de la paroi
+  EA?: number; // kN rigidité axiale de la paroi
 }
 
 export interface ModeleTerrain {

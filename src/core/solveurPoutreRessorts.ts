@@ -17,6 +17,7 @@ export interface RessortNodal {
   direction: 'x' | 'y' | 'rotation';
   reactionMax?: number; // plafond positif [kN ou kN.m], absent = illimité
   reactionMin?: number; // plafond négatif [kN ou kN.m], absent = illimité
+  deplacementReference?: number; // déplacement de référence (ex: état du nœud au moment de la pose d'un appui)
 }
 
 export interface ChargeNodale {
@@ -379,8 +380,10 @@ export function resoudrePoutreSurRessorts(
       const res = ressorts[rIdx];
       const ddl = statutsRessorts[rIdx].ddlIndex;
       const u_val = U_courant[ddl];
+      const u_ref = res.deplacementReference ?? 0;
+      const u_relatif = u_val - u_ref;
 
-      const F_lineaire = res.raideur * u_val;
+      const F_lineaire = res.raideur * u_relatif;
       let F_cap = F_lineaire;
       let estPlastifie = false;
 
@@ -396,8 +399,11 @@ export function resoudrePoutreSurRessorts(
       statutsRessorts[rIdx].reaction = F_cap;
 
       if (!estPlastifie) {
-        // Domaine élastique : contribution directe à la raideur
+        // Domaine élastique : contribution directe à la raideur et au second membre
         K_iter[ddl][ddl] += res.raideur;
+        if (u_ref !== 0) {
+          F_iter[ddl] += res.raideur * u_ref;
+        }
       } else {
         // Domaine plastifié : la raideur tangente est nulle (ou résiduelle eps),
         // et la force de réaction constante oppose le déplacement (donc F_ext - F_cap)
@@ -462,7 +468,9 @@ export function resoudrePoutreSurRessorts(
       const res = ressorts[rIdx];
       const ddl = statutsRessorts[rIdx].ddlIndex;
       const u_val = U_courant[ddl];
-      const F_test = res.raideur * u_val;
+      const u_ref = res.deplacementReference ?? 0;
+      const u_relatif = u_val - u_ref;
+      const F_test = res.raideur * u_relatif;
 
       let plas = false;
       if (res.reactionMax !== undefined && F_test > res.reactionMax) plas = true;
@@ -504,7 +512,9 @@ export function resoudrePoutreSurRessorts(
   const reactionsRessorts = ressorts.map((res, idx) => {
     const ddl = statutsRessorts[idx].ddlIndex;
     const u_val = U_courant[ddl];
-    let F_calc = res.raideur * u_val;
+    const u_ref = res.deplacementReference ?? 0;
+    const u_relatif = u_val - u_ref;
+    let F_calc = res.raideur * u_relatif;
     let plastifie = false;
 
     if (res.reactionMax !== undefined && F_calc > res.reactionMax) {

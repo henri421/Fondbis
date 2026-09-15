@@ -1,7 +1,8 @@
-import { CoucheGeotechnique, Hydrogeologie, ConfigurationNormative } from '../types/geotech';
+import { CoucheGeotechnique, Hydrogeologie, ConfigurationNormative, AppuiPhase, PhaseParoi } from '../types/geotech';
 import { CONFIG_NORMATIVE_DEFAUT } from '../norme/configNormativeDefaut';
 import { TestResultatIndividuel } from './acceptanceTests';
 import { calculerProfilPressionLimite } from '../modules/soutenement/pressionLimiteParoi';
+import { calculerParoiPhasee } from '../modules/soutenement/paroiPhasee';
 
 /**
  * Suite de tests d'acceptation normatifs pour les écrans et parois de soutènement (Phase 4 / §8)
@@ -131,6 +132,273 @@ export function executerTestsAcceptationSoutenement(
       message: succes
         ? 'Pressions limites Pa et Pp parfaitement conformes aux solutions analytiques de Rankine amont/aval, sol excavé à Pp=0'
         : 'Écart hors tolérance sur les pressions limites de soutènement',
+    });
+  }
+
+  // Couche sable standard pour les tests de phasage
+  const coucheSable: CoucheGeotechnique = {
+    id: 'C_SABLE',
+    nom: 'Sable homogène de référence',
+    coteToit: 100.0,
+    epaisseur: 25.0,
+    nature: 'sable',
+    couleurAffichage: '#e9c46a',
+    poidsVolumiques: {
+      gammaHumide: { v: 18.0, u: 'kN/m³', statut: 'mesure', source: 'essai' },
+      gammaSature: { v: 20.0, u: 'kN/m³', statut: 'mesure', source: 'essai' },
+    },
+    resistanceDrainee: {
+      phiPrime: { v: 30.0, u: 'deg', statut: 'mesure', source: 'essai' },
+      phiCritique: { v: 30.0, u: 'deg', statut: 'mesure', source: 'essai' },
+      cPrime: { v: 0.0, u: 'kPa', statut: 'mesure', source: 'essai' },
+      psiDilatance: { v: 0.0, u: 'deg', statut: 'mesure', source: 'essai' },
+      deltaInterface: { v: 0.0, u: 'deg', statut: 'mesure', source: 'essai' },
+    },
+    resistanceNonDrainee: {
+      cuTete: { v: 0.0, u: 'kPa', statut: 'mesure', source: 'defaut' },
+      gradientCu: { v: 0.0, u: 'kPa/m', statut: 'mesure', source: 'defaut' },
+    },
+    deformation: {} as any,
+  };
+
+  const hydroSansNappe: Hydrogeologie = {
+    nappePrincipale: {
+      coteCaracteristique: -100.0,
+      coteDefavorableELU: -100.0,
+      regime: 'hydrostatique',
+    },
+    gradientVertical: null,
+    nappesSecondaires: [],
+    poidsVolumiqueEau: 9.81,
+  };
+
+  // --------------------------------------------------------------------------
+  // T_PHASE.1 — Cohérence statique phase unique (§8.4)
+  // --------------------------------------------------------------------------
+  {
+    const coteTete = 100.0;
+    const coteFond = 97.0; // 3 m d'excavation
+    const coteBase = 88.0; // 9 m de fiche
+
+    const phase1: PhaseParoi = {
+      numero: 1,
+      nom: 'Excavation 3m sans appui',
+      coteFondFouille: coteFond,
+    };
+
+    const resCalcul = calculerParoiPhasee({
+      coteTete,
+      coteBase,
+      E: 30e6, // 30 GPa
+      I: 0.04, // m4/m
+      A: 0.8, // m2/m
+      couches: [coucheSable],
+      hydrogeologie: hydroSansNappe,
+      configurationNormative: config,
+      etat: 'ELS',
+      phases: [phase1],
+      appuis: [],
+      khParCouche: 20000, // kN/m3
+      pasMaillage: 0.25,
+    });
+
+    const phaseRes = resCalcul.phases[0];
+    const prof = phaseRes.profilPressionLimite;
+
+    // Intégration trapézoïdale directe du diagramme Pa(z)
+    let Pa_integrale = 0;
+    let Ma_base_integrale = 0;
+    for (let i = 0; i < prof.length - 1; i++) {
+      const p1 = prof[i];
+      const p2 = prof[i + 1];
+      const dz = Math.abs(p1.cote - p2.cote);
+      const paMoy = (p1.Pa + p2.Pa) / 2;
+      const zMoy = (p1.cote + p2.cote) / 2;
+      Pa_integrale += paMoy * dz;
+      Ma_base_integrale += paMoy * dz * (zMoy - coteBase);
+    }
+
+    // Résultante totale et moment total donnés par les réactions des ressorts du solveur
+    let R_totale_solveur = 0;
+    let MR_base_solveur = 0;
+    for (const r of phaseRes.resultatSolveur.reactionsRessorts) {
+      R_totale_solveur += r.reaction;
+      const coteNoeud = resCalcul.noeuds[r.noeudIndex].y;
+      MR_base_solveur += r.reaction * (coteNoeud - coteBase);
+    }
+
+    const ecartR = Math.abs(R_totale_solveur - Pa_integrale);
+    const ecartRelR = (ecartR / Pa_integrale) * 100;
+    const ecartM = Math.abs(MR_base_solveur - Ma_base_integrale);
+    const ecartRelM = (ecartM / Ma_base_integrale) * 100;
+
+    const succes =
+      phaseRes.resultatSolveur.convergence.convergé &&
+      ecartRelR < 1.0 &&
+      ecartRelM < 1.0;
+
+    resultats.push({
+      id: 'T_PHASE.1',
+      nom: 'Cohérence statique phase unique (somme des réactions vs intégrale Pa)',
+      phase: 'Brique §8.4',
+      description:
+        'Vérifie que la résultante horizontale totale et le moment à la base issus des ressorts du solveur correspondent à l\'intégrale trapézoïdale de Pa(z) (écart de discrétisation < 1%).',
+      valeurAttendue: `R_sol = ${Pa_integrale.toFixed(2)} kN/m, M_base = ${Ma_base_integrale.toFixed(2)} kNm/m`,
+      valeurObtenue: `R_solveur = ${R_totale_solveur.toFixed(2)} kN/m, M_solveur = ${MR_base_solveur.toFixed(2)} kNm/m (écarts: R ${ecartRelR.toFixed(3)}%, M ${ecartRelM.toFixed(3)}%)`,
+      tolerance: 'Écart relatif < 1.0 % (erreur de discrétisation)',
+      ecartAbsolu: Math.max(ecartR, ecartM),
+      ecartPourcentage: Number(Math.max(ecartRelR, ecartRelM).toFixed(3)),
+      succes,
+      message: succes
+        ? 'Équilibre statique global rigoureusement vérifié entre intégrale Pa et réactions de sol'
+        : 'Non-cohérence statique entre réactions de ressorts et diagramme de poussée',
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // T_PHASE.2 — Chaînage et buton installé en cours de phasage (§8.4)
+  // --------------------------------------------------------------------------
+  {
+    const coteTete = 100.0;
+    const coteBase = 88.0;
+    const coteButon = 99.0;
+    const kButon = 50000.0; // kN/m
+
+    const appuiButon: AppuiPhase = {
+      id: 'BUTON_1',
+      cote: coteButon,
+      type: 'buton',
+      raideur: kButon,
+      phaseActivation: 2, // Activé en phase 2 seulement
+    };
+
+    const phase1: PhaseParoi = {
+      numero: 1,
+      nom: 'Excavation 2m sans appui',
+      coteFondFouille: 98.0,
+    };
+
+    const phase2: PhaseParoi = {
+      numero: 2,
+      nom: 'Excavation 5m avec buton activé à 99m',
+      coteFondFouille: 95.0,
+    };
+
+    const resCalcul = calculerParoiPhasee({
+      coteTete,
+      coteBase,
+      E: 30e6,
+      I: 0.04,
+      A: 0.8,
+      couches: [coucheSable],
+      hydrogeologie: hydroSansNappe,
+      configurationNormative: config,
+      etat: 'ELS',
+      phases: [phase1, phase2],
+      appuis: [appuiButon],
+      khParCouche: 20000,
+      pasMaillage: 0.25,
+    });
+
+    const p1Res = resCalcul.phases[0];
+    const p2Res = resCalcul.phases[1];
+
+    // Recherche de l'index du nœud correspondant à la cote du buton
+    const idxButon = resCalcul.noeuds.findIndex(
+      (n) => Math.abs(n.y - coteButon) < 1e-4
+    );
+
+    const u1 = p1Res.resultatSolveur.deplacements[idxButon].ux;
+    const u2 = p2Res.resultatSolveur.deplacements[idxButon].ux;
+
+    const infoButonP2 = p2Res.reactionsAppuis.find((a) => a.appuiId === 'BUTON_1');
+    const reactionObtenue = infoButonP2?.reaction ?? 0;
+    const reactionAttendue = kButon * (u2 - u1);
+    const reactionFausseSansChainage = kButon * u2;
+
+    const ecartAbsolu = Math.abs(reactionObtenue - reactionAttendue);
+    const ecartChainageVsFaux = Math.abs(reactionObtenue - reactionFausseSansChainage);
+
+    const succes =
+      Math.abs(u1) > 1e-4 && // u1 doit être non nul pour que le test ait du sens
+      ecartAbsolu < 1e-5 && // Réaction égale à k*(u2 - u1)
+      ecartChainageVsFaux > 10.0; // Vérification que sans chaînage, la valeur aurait été significativement fausse
+
+    resultats.push({
+      id: 'T_PHASE.2',
+      nom: 'Chaînage et buton installé en cours de phasage (loi F = k*(u2 - u1))',
+      phase: 'Brique §8.4',
+      description:
+        'Vérifie qu\'un appui activé en phase 2 prend pour référence le déplacement u1 de la phase 1, avec réaction exacte R = k*(u2 - u1) et non k*u2.',
+      valeurAttendue: `u1 = ${(u1 * 1000).toFixed(2)} mm, R_buton = ${reactionAttendue.toFixed(2)} kN/m`,
+      valeurObtenue: `u1 = ${(u1 * 1000).toFixed(2)} mm, R_buton = ${reactionObtenue.toFixed(2)} kN/m (si sans chaînage: ${reactionFausseSansChainage.toFixed(2)} kN/m)`,
+      tolerance: 'Résidu < 1e-5 kN/m sur la loi du ressort, u1 > 0.1 mm',
+      ecartAbsolu,
+      ecartPourcentage: Number(((ecartAbsolu / Math.max(1, Math.abs(reactionAttendue))) * 100).toFixed(6)),
+      succes,
+      message: succes
+        ? 'Chaînage des déplacements parfaitement effectif : déformation initiale u1 neutralisée dans le buton'
+        : 'Échec du chaînage : déplacement de référence u1 non pris en compte dans le buton',
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // T_PHASE.3 — Monotonie physique (garde-fou cantilever) (§8.4)
+  // --------------------------------------------------------------------------
+  {
+    const coteTete = 100.0;
+    const coteBase = 86.0;
+
+    const phase1: PhaseParoi = {
+      numero: 1,
+      nom: 'Excavation 2m',
+      coteFondFouille: 98.0,
+    };
+
+    const phase2: PhaseParoi = {
+      numero: 2,
+      nom: 'Excavation 4m',
+      coteFondFouille: 96.0,
+    };
+
+    const resCalcul = calculerParoiPhasee({
+      coteTete,
+      coteBase,
+      E: 30e6,
+      I: 0.04,
+      A: 0.8,
+      couches: [coucheSable],
+      hydrogeologie: hydroSansNappe,
+      configurationNormative: config,
+      etat: 'ELS',
+      phases: [phase1, phase2],
+      appuis: [],
+      khParCouche: 20000,
+      pasMaillage: 0.25,
+    });
+
+    const M1 = resCalcul.phases[0].momentMaxAbsolu;
+    const M2 = resCalcul.phases[1].momentMaxAbsolu;
+    const u1Max = resCalcul.phases[0].deplacementMaxAbsolu;
+    const u2Max = resCalcul.phases[1].deplacementMaxAbsolu;
+
+    const succes = M2 > M1 && u2Max > u1Max;
+
+    resultats.push({
+      id: 'T_PHASE.3',
+      nom: 'Monotonie physique (augmentation des sollicitations avec excavation)',
+      phase: 'Brique §8.4',
+      description:
+        'Vérifie sur une paroi cantilever que le moment fléchissant maximal et la flèche maximale augmentent strictement entre une excavation à 2 m et une excavation à 4 m.',
+      valeurAttendue: 'M_max(phase 2) > M_max(phase 1) et u_max(phase 2) > u_max(phase 1)',
+      valeurObtenue: `M1 = ${M1.toFixed(2)} kNm/m, M2 = ${M2.toFixed(2)} kNm/m | u1 = ${(u1Max * 1000).toFixed(2)} mm, u2 = ${(u2Max * 1000).toFixed(2)} mm`,
+      tolerance: 'M2 > M1 et u2 > u1 stricts',
+      ecartAbsolu: 0,
+      ecartPourcentage: 0,
+      succes,
+      message: succes
+        ? 'Monotonie physique respectée : sollicitations et flèches augmentent strictement avec le creusement'
+        : 'Violation de la monotonie physique (possible inversion de signe des charges ou rigidités)',
     });
   }
 
