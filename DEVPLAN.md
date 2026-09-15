@@ -348,19 +348,135 @@ tant que le câblage `CampagneEssai` n'existe pas (avertissement déjà en place
 
 ---
 
-## Prochaines étapes (selon plan)
+## Tâche combinée envoyée à Gemini (2026-09-15) : §12.1 + finalisation phase 6 + phase 7
 
-Dans l'ordre, une tâche Gemini à la fois, chacune revue et testée avant la suivante :
+**Écart de discipline assumé** : jusqu'ici une seule tâche à la fois, revue avant la
+suivante. À la demande d'Henri, les trois derniers chantiers sont envoyés groupés en une
+seule session AI Studio. Conséquence pour la revue au retour : ne pas accepter le livrable
+en bloc — relire et retester **chacune des trois parties séparément**, exactement comme si
+elles étaient arrivées l'une après l'autre. Les trois sont indépendantes entre elles (aucune
+ne dépend du code livré par une autre), donc rien n'empêche de les revoir dans n'importe quel
+ordre, ou de n'en accepter que certaines si une autre a un problème.
 
-1. **Sensibilité paramétrique (§12.1)** : peut être traitée à tout moment en parallèle,
-   indépendante du solveur — dérivée numérique sur les paramètres de sol principaux, affichage
-   de la dispersion à côté de chaque résultat.
-2. **Phase 6, finalisation** : recherche automatique du cercle critique (grille de centres/
-   rayons + raffinement local, déjà en partie présente) et écoulement/réseau simplifié,
-   confrontés aux cas de référence publiés (§12.6 — liste à obtenir de l'ingénieur).
-3. **Phase 7** : radier sur ressorts itératifs (§6.6, boucle décrite dans le CDC, réutilise le
-   solveur de plaque à mutualiser avec la brique matricielle), export vers les modules
-   structuraux (format d'échange à définir avec Aedificium/Structura).
+**Constat fait en préparant cette tâche (pas encore signalé avant)** : `OngletStabilite.tsx`
+utilise `calculerStabiliteBishop`, qui n'est **pas** la méthode de Bishop simplifiée malgré
+son nom — la somme résistante n'est jamais divisée par `m_alpha(F)` (pas d'itération sur F
+dans le dénominateur), ce qui en fait en réalité un calcul proche de Fellenius (méthode
+ordinaire des tranches, plus conservative et non conforme à ce que demande le CDC §9.1).
+Pire : la géométrie du talus y est **codée en dur** (`{x:-10,y:coteTerrainNaturel},
+{x:5,...},{x:15,...-4},{x:35,...-4}}`), indépendante de tout projet réel. Le vrai Bishop
+itératif existe déjà à côté (`calculerBishopPourCercle` / `rechercherCercleCritique`,
+correctement formulé, F au dénominateur de m_alpha) mais n'est branché nulle part dans
+l'UI. Ce point structure la partie B ci-dessous.
+
+### A. Sensibilité paramétrique (§12.1)
+
+CDC : « Ajouter une analyse de sensibilité paramétrique par dérivée numérique sur les
+paramètres principaux. [...] afficher un résultat à trois chiffres significatifs sans
+indicateur de sensibilité serait trompeur. »
+
+1. **Utilitaire générique** `src/core/sensibilite.ts` : fonction
+   `calculerSensibiliteParametrique(evaluer: () => number, parametres: {label: string, valeurRef: number, appliquer: (v: number) => void}[], deltaRelatif = 0.01)`.
+   Pour chaque paramètre : perturbation centrée `±deltaRelatif·valeurRef` (ou `±deltaRelatif`
+   absolu pour un paramètre déjà proche de zéro, ex. `c'=0`), `appliquer` fixe la valeur
+   perturbée sur l'objet d'entrée, `evaluer()` relance le calcul complet et retourne le
+   scalaire observé. Sensibilité normalisée (élasticité) :
+   `S = ((f(x+h) - f(x-h)) / (2·f(x))) / (deltaRelatif)`, en %. Restaurer la valeur de
+   référence après chaque paramètre (ne jamais laisser l'objet d'entrée perturbé).
+2. **Brancher sur trois résultats**, dans cet ordre de priorité (s'arrêter si le temps
+   manque, ne pas improviser sur les autres modules) :
+   - Portance ELU radier (`verifierPortanceRadierELU`) : sensibilité de `R_d` à `φ'`, `c'`,
+     `γ`.
+   - Capacité axiale pieu (`calculerCapacitePieu`) : sensibilité de `Rc;k` aux paramètres de
+     résistance du sol utilisés en entrée.
+   - Stabilité générale : sensibilité de F (Bishop, cercle déjà trouvé — ne pas relancer la
+     recherche du cercle critique à chaque perturbation, uniquement Bishop sur le cercle
+     fixé, pour rester rapide) à `φ'`, `c'`.
+3. **Affichage** : petit badge/texte à côté de chaque résultat concerné (« sensible à φ' :
+   ±8 % pour ±1 % » ou équivalent), pas un onglet séparé.
+4. **Test T_SENS.1 — vérification analytique indépendante, pas tautologique.** Sur le cas
+   T1.1 (`φ'=30°`, `c'=0`, `γ=18`, `B=2`, `D=1`, semelle filante), la portance
+   `R/A' = q'·Nq + 0.5·γ'·B'·Nγ` a une dérivée analytique connue en `φ'` (Nq et Nγ ont des
+   formes closes dérivables à la main). Calculer cette dérivée analytique **séparément**,
+   dans le test, sans passer par `calculerSensibiliteParametrique`, et comparer à la
+   sensibilité numérique retournée par l'utilitaire — écart < 2 % (erreur de troncature de
+   la différence finie). Ce test compare deux calculs indépendants, pas un calcul à
+   lui-même.
+
+### B. Finalisation phase 6 — stabilité générale + hydraulique (§9.1, §9.2)
+
+1. **Unifier sur le vrai Bishop.** Retirer `calculerStabiliteBishop` (ou le réécrire pour
+   qu'il appelle `calculerBishopPourCercle`) — un seul calcul de F dans tout le code, celui
+   qui itère correctement sur `m_alpha(F)`.
+2. **Géométrie réelle du talus, pas une géométrie inventée.** Le modèle de terrain n'a
+   aujourd'hui qu'une cote de terrain naturel plate (`Referentiel.coteTerrainNaturel`,
+   nombre unique). Étendre `ModeleTerrain` avec un profil de terrain naturel optionnel —
+   polyligne `{x: number, y: number}[]`, `null`/absent = terrain plat à
+   `coteTerrainNaturel` (comportement inchangé pour tout projet existant). `OngletStabilite`
+   doit lire ce profil réel, pas une géométrie codée en dur.
+3. **Recherche automatique du cercle critique** (déjà codée dans
+   `rechercherCercleCritique`) : brancher dans l'UI comme action explicite (« Rechercher le
+   cercle critique »), qui remplit les champs centre/rayon actuellement saisis à la main.
+   Garder la saisie manuelle possible (l'ingénieur doit pouvoir forcer un cercle donné).
+4. **Hydraulique — renard de fond de fouille** (`verifierRenardFondDeFouille`) : fonction
+   déjà écrite mais **branchée nulle part dans l'UI**. L'intégrer côté paroi phasée
+   (`OngletParoiPhasee`, quand une nappe amont existe et qu'une fiche est définie) et/ou
+   côté radier (UPL/HYD déjà présent) — au choix le plus naturel à l'intégration, à
+   documenter dans `DEVPLAN.md` au retour.
+5. **§12.6 — pas de cas de référence disponibles.** Le CDC est explicite : « La liste des
+   cas de référence sera fournie par l'ingénieur ». **Ne pas inventer de valeur cible.**
+   Construire uniquement le mécanisme demandé par le CDC (« jeu de tests enregistrés,
+   exécutable d'un clic, avec rapport d'écarts ») : un fichier JSON de cas
+   (`src/validation/casReferenceStabilite.json`, vide ou avec un seul cas placeholder
+   explicitement marqué `"source": "PLACEHOLDER - a remplacer par un cas fourni par
+   l'ingenieur"`) et un runner qui le lit et compare. Ne pas le faire passer pour un test
+   d'acceptation validé.
+6. **Test T_STAB.2 — vérification analytique indépendante (limite de pente infinie).** Pour
+   un grand rayon R (R ≫ hauteur du talus), la méthode de Bishop sur un cercle passant par
+   un point donné d'une pente d'angle `β` doit converger vers la solution classique de pente
+   infinie :
+   `F = [c' + (γ·h·cos²β − u)·tanφ'] / (γ·h·sinβ·cosβ)`
+   (glissement plan parallèle à la pente, formule standard de mécanique des sols, à ne pas
+   re-dériver — c'est une vérification de cohérence asymptotique du solveur circulaire, pas
+   un cas publié). Tolérance large (5 %, effet de courbure résiduel à grand rayon).
+
+### C. Phase 7 — radier sur ressorts itératifs (§6.6)
+
+C'est la pièce la plus nouvelle : contrairement aux briques précédentes, elle a besoin d'un
+**solveur de plaque 2D** (le solveur existant, `solveurPoutreRessorts.ts`, est un élément de
+poutre 1D — valable pour un mur ou un pieu, pas pour une dalle sur sol). Ne pas sous-estimer
+cette partie ; si le temps manque, livrer A et B d'abord et documenter C comme repris à la
+prochaine session plutôt que de bâcler un solveur de plaque.
+
+1. **Élément de plaque.** Discrétisation en éléments de plaque rectangulaires (plaque mince
+   de Kirchhoff, 4 nœuds, 3 DDL/nœud : `w`, `θx`, `θy` — cohérent avec la manière dont
+   `solveurPoutreRessorts.ts` gère déjà 6 DDL/nœud pour la poutre). Assemblage en matrice
+   bande, même famille de résolution que l'existant. Nouveau fichier
+   `src/core/solveurPlaqueSurRessorts.ts`, testé indépendamment (cas de référence : plaque
+   simplement appuyée sous charge uniforme, flèche max comparée à la solution analytique de
+   Timoshenko — valeur connue et citable, ne pas l'improviser sans la vérifier dans un
+   ouvrage de référence).
+2. **Boucle itérative** (CDC §6.6, à respecter à la lettre) :
+   ```
+   ks = estimation initiale (ex: depuis un module pressiométrique ou kh saisi)
+   répéter :
+       résoudre la plaque sur ressorts de raideur ks (répartition de pression sous radier)
+       pour chaque point : tassement = calculerTassementRadierELS(pression locale, ...)
+       ks_nouveau = pression / tassement (localement, par nœud)
+   jusqu'à convergence du champ de tassement, critère relatif 1 %
+   ```
+3. **Sorties** : distribution de pression sous radier, champ de tassement, tassement
+   différentiel max (déjà la priorité d'affichage ailleurs dans l'app, cf. §6.5 CDC).
+4. **Export vers modules structuraux** : reporter le format d'échange déjà en place pour la
+   paroi phasée (nœuds, déplacements, moments) plutôt que d'en inventer un nouveau — même
+   pour un simple export JSON pour l'instant, l'intégration Aedificium/Structura reste hors
+   scope de cette tâche.
+5. **Tests** : au minimum un cas de plaque isolée (sans itération, ks uniforme donné) contre
+   la solution analytique de Timoshenko (déviation du solveur de plaque seul), puis un cas
+   itératif simple (sol homogène, radier carré, charge centrée) vérifiant que la boucle
+   converge (< 1 % en moins de ~15 itérations) et que la pression sous le centre dépasse
+   celle sous les bords pour un radier suffisamment rigide (comportement physique attendu,
+   pas une valeur ciblée).
 
 ## Groupe de pieux (§7.6) — revue Claude (2026-09-15)
 
