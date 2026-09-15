@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { ModeleTerrain, OuvragePieu } from '../types/geotech';
 import { verifierPieuAxial } from '../modules/pieux/capaciteAxiale';
-import { ShieldAlert, ShieldCheck, Layers, Users, ArrowDown, HelpCircle } from 'lucide-react';
+import { VuePieuTransversal } from './pieux/VuePieuTransversal';
+import { ShieldAlert, ShieldCheck, Layers, Users, ArrowDown, HelpCircle, Activity } from 'lucide-react';
 
 interface OngletPieuxProps {
   modele: ModeleTerrain;
@@ -9,6 +10,8 @@ interface OngletPieuxProps {
 }
 
 export const OngletPieux: React.FC<OngletPieuxProps> = ({ modele, onUpdatePieu }) => {
+  const [sousOnglet, setSousOnglet] = useState<'axial' | 'transversal'>('axial');
+
   const pieuActif =
     modele.ouvrages.pieux[0] || {
       id: 'PIEU-01',
@@ -68,8 +71,44 @@ export const OngletPieux: React.FC<OngletPieuxProps> = ({ modele, onUpdatePieu }
 
   return (
     <div className="space-y-5">
-      {/* 1. Configuration du Pieu */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Navigation sous-onglets : Axial vs Transversal */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+        <button
+          onClick={() => setSousOnglet('axial')}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+            sousOnglet === 'axial'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <ArrowDown className="w-3.5 h-3.5" />
+          Portance Axiale ELU (DA2*)
+        </button>
+        <button
+          onClick={() => setSousOnglet('transversal')}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+            sousOnglet === 'transversal'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <Activity className="w-3.5 h-3.5 text-sky-400" />
+          Comportement Transversal & Courbes p-y (EN 1997-1 §7.7)
+        </button>
+      </div>
+
+      {sousOnglet === 'transversal' ? (
+        <VuePieuTransversal
+          diametre={pieuActif.diametre}
+          coteTete={pieuActif.coteTete}
+          cotePointe={pieuActif.cotePointe}
+          couches={modele.couches}
+          hydrogeologie={modele.hydrogeologie}
+        />
+      ) : (
+        <>
+          {/* 1. Configuration du Pieu */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Géométrie & Exécution */}
         <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs">
           <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
@@ -404,6 +443,8 @@ export const OngletPieux: React.FC<OngletPieuxProps> = ({ modele, onUpdatePieu }
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 };

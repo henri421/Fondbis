@@ -75,6 +75,13 @@ export const CLAUSES_EC7: Record<string, ClauseReference> = {
     statut: 'Informative',
     description: 'Méthode numérique (poutre sur appuis élastoplastiques, coefficient de réaction) non prescrite par une clause EC7 spécifique : outil de calcul au service des vérifications normatives de la section 9 (ouvrages de soutènement), pas lui-même une clause citable.',
   },
+  effet_transversal_pieu: {
+    code: 'effet_transversal_pieu',
+    clause: 'EN 1997-1:2004 Clause 7.7',
+    titre: 'Chargement transversal des pieux',
+    statut: 'Normative',
+    description: 'Modélisation par poutre sur appuis élastoplastiques non linéaires (courbes de réaction p-y de Matlock, Reese ou approche pressiométrique).',
+  },
 };
 
 export const BANDEAU_NORMATIF_OBLIGATOIRE = 
