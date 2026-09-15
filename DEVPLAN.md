@@ -46,7 +46,7 @@ traitée en parallèle, ne dépend de rien d'autre.
 | 3 | Module B : pieu axial isolé puis groupe | ⚠️ Isolé validé (T3.1) ; **groupe de pieux (§7.6) non vérifié** — à confirmer avant de considérer la phase 3 close |
 | — | Brique §9.3 solveur matriciel | ✅ Durci et validé (13/13 T_SOLV.1-6) |
 | — | Brique §8.2 profil de pression limite | ✅ Livrée et revue par Claude (14/14, T_PRESS.1) |
-| 4 | Module C niveau 2 : phasage et coefficient de réaction | ⏳ Spec prête, revue §8.2 faite — à envoyer à Gemini |
+| 4 | Module C niveau 2 : phasage et coefficient de réaction | ✅ Livrée par Gemini, **bug de double-comptage corrigé par Claude**, 18/18 revalidés — onglet UI restant |
 | 5 | Module B transversal : courbes de réaction p-y | ❌ Non commencé |
 | 6 | Stabilité générale + hydraulique | 🟡 En avance, non finalisé (à confronter aux tests §12.6) |
 | 7 | Radier sur ressorts itératifs, export structural | ❌ Non commencé |
@@ -159,9 +159,15 @@ d'interface est un jour exposé en phase 4.)*
 
 ---
 
-## Phase 4 — Paroi flexible phasée (§8.4) (TERMINÉ - 18/18 tests validés)
+## Phase 4 — Paroi flexible phasée (§8.4) — livraison Gemini (2026-09-15)
 
-Livré et validé conformément aux spécifications :
+> ⚠️ **Livraison initiale, corrigée par la revue Claude ci-dessous.** Le « 18/18 » et les
+> valeurs numériques de ce bloc correspondent au code *avant* correction d'un bug de
+> double-comptage trouvé en revue (résultante/moment surestimés d'environ 25-45%). Voir
+> « Revue Claude (2026-09-15) de la Phase 4 » plus bas pour les valeurs corrigées et
+> validées (18/18 également, avec un modèle physique correct).
+
+Livré, conforme aux spécifications sur les points 1, 2 et une partie du point 3 (voir revue) :
 1. **Extension préalable du solveur (`src/core/solveurPoutreRessorts.ts`)** :
    - Ajout de `deplacementReference?: number` dans `RessortNodal`.
    - Loi de comportement actualisée : $F = k \cdot (u - u_{\mathrm{ref}})$ avec compensation rigoureuse au second membre $k \cdot u_{\mathrm{ref}}$ et bornage en plastification.
@@ -179,6 +185,72 @@ Livré et validé conformément aux spécifications :
    - **T_PHASE.1** : Cohérence statique phase unique. Résultante $R_{\mathrm{sol}} = 432.00\text{ kN/m}$ ($0.000\%$ d'écart) et moment à la base $M = 1727.29\text{ kNm/m}$ ($0.060\%$ d'écart par rapport à l'intégrale continue de $P_a(z)$).
    - **T_PHASE.2** : Chaînage et buton installé en cours de phasage. Déplacement initial $u_1 = 0.93\text{ mm}$ neutralisé, réaction exacte $R = k \cdot (u_2 - u_1) = 46.31\text{ kN/m}$ (différente de la valeur sans chaînage $92.64\text{ kN/m}$, résidu nul).
    - **T_PHASE.3** : Monotonie physique. Augmentation stricte de $M_{\mathrm{max}}$ ($25.95 \to 151.75\text{ kNm/m}$) et de $u_{\mathrm{max}}$ ($4.16 \to 6.38\text{ mm}$) entre excavations à 2 m et 4 m.
+
+---
+
+## Revue Claude (2026-09-15) de la Phase 4 — bug trouvé et corrigé directement
+
+Revue faite en relisant `paroiPhasee.ts` en entier contre la spec ci-dessus, puis en
+ré-exécutant `npm run test:acceptance` de façon indépendante (pas seulement en faisant
+confiance au rapport « 18/18 »).
+
+**1 bug de modélisation trouvé, significatif, corrigé directement (pas besoin de repasser
+par Gemini — correction ciblée d'une dizaine de lignes, bien comprise) :**
+
+Gemini a ajouté une charge nodale motrice `chargeMotriceX = Pa(z) * largeurTributaire`
+**à tous les nœuds du maillage, y compris sous le fond de fouille** — alors que la spec
+(section « Conversion pression → ressort par nœud, par phase » ci-dessus dans ce document)
+ne prévoyait **aucune charge séparée** : sous le fond de fouille, l'interaction des deux
+faces du sol devait être portée **exclusivement** par le ressort net borné
+`[-Pa(z)·lt, +Pp(z)·lt]` (simplification documentée, valable car les deux faces sont
+réellement présentes à cette profondeur et démarrent d'un état à peu près équilibré).
+Au-dessus du fond de fouille en revanche (sol excavé côté aval, aucun ressort), une charge
+motrice fixe est bien nécessaire — la spec ne le précisait pas explicitement, c'est un trou
+de la spec d'origine que Gemini a comblé à raison. Le problème est de l'avoir aussi
+appliquée **sous** le fond de fouille, où elle s'ajoute en double à la borne `reactionMin =
+-Pa·lt` du ressort déjà prévue pour représenter cette même poussée active.
+
+**Mise en évidence numérique** (cas T_PHASE.1, cantilever, excavation 3 m, fiche 9 m) : avec
+le bug, le déplacement croît de façon monotone jusqu'au pied de la paroi (aucun point de
+bascule) — signature physiquement invraisemblable pour une paroi encastrée avec fiche
+adéquate. En restreignant `chargeMotriceX` (part `Pa`) aux nœuds strictement au-dessus du
+fond de fouille : $M_{\max}$ passe de $69.08$ à $52.32\text{ kNm/m}$ ($-24\%$), $u_{\max}$ de
+$3.20$ à $1.83\text{ mm}$ ($-43\%$), et un vrai point de bascule apparaît en pied (déplacement
+change de signe, comportement classique d'encastrement). La part eau différentielle
+`uDiff` reste appliquée à tous les nœuds (elle n'est pas bornée par le ressort, cf. spec —
+ce terme est correct et indépendant du bug).
+
+**Correction appliquée dans `paroiPhasee.ts`** : `chargeMotriceX` ne comprend plus la part
+`Pa * lt` que pour les nœuds avec `cote > coteFond` ; la part `uDiff * lt` reste appliquée
+partout.
+
+**T_PHASE.1 corrigé également** : tel qu'écrit, il comparait la somme des réactions à une
+intégrale de `Pa(z)` sur **toute la hauteur** — la même quantité, au même endroit, que celle
+injectée comme charge dans le solveur. Un test structurellement tautologique : il valide
+l'équilibre global du solveur (toujours vrai par construction d'un système EF), pas la
+pertinence physique du modèle, et n'aurait donc pas pu détecter ce bug. Récrit pour intégrer
+`Pa(z)` uniquement au-dessus du fond de fouille, avec la même quadrature nodale (largeurs
+tributaires) que le moteur plutôt qu'une intégrale trapézoïdale continue (l'écart entre les
+deux, ~7-8% dans ce cas, venait de la coupure nette au fond de fouille mal capturée par une
+intégrale continue). Ce test reste avant tout un contrôle d'équilibre du solveur ; la
+pertinence physique du modèle de ressort en fiche repose sur cette revue (lecture du code +
+diagnostic numérique ci-dessus), pas sur ce test seul.
+
+**Bilan après correction : 18 / 18 tests validés**, `npm run lint` et `npm run build`
+propres. Valeurs corrigées de T_PHASE.1-3 disponibles en exécutant
+`npm run test:acceptance` (non recopiées ici pour éviter un nouveau désalignement si le
+code évolue encore).
+
+**Point encore ouvert, pas bloquant pour la suite immédiate** : `khParCouche` est saisi
+directement par couche (kN/m³) sans dérivation pressiométrique — conforme à la spec, qui
+l'autorise explicitement en alternative (§8.4 du CDC). Pas de garde-fou UI pour signaler
+une valeur de `kh` non renseignée pour une couche (retombe sur `20000` par défaut,
+silencieusement) — à traiter à l'écriture de l'onglet UI.
+
+**Wiring redéfait par le scaffold AI Studio, re-corrigé (3ᵉ occurrence) :**
+`package-lock.json` de nouveau supprimé par le scaffold — régénéré (`npm install
+--package-lock-only`). Point désormais chronique à chaque session AI Studio ; voir
+`AGENTS.md` (déjà documenté, aucune action supplémentaire possible côté Claude).
 
 ---
 

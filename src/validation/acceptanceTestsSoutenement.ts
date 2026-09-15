@@ -205,17 +205,24 @@ export function executerTestsAcceptationSoutenement(
     const phaseRes = resCalcul.phases[0];
     const prof = phaseRes.profilPressionLimite;
 
-    // Intégration trapézoïdale directe du diagramme Pa(z)
+    // Somme nodale (lumped) de Pa(z) * largeurTributaire, UNIQUEMENT au-dessus du fond de
+    // fouille : c'est exactement la charge appliquée par calculerParoiPhasee (moteur), nœud par
+    // nœud. En dessous du fond de fouille, l'interaction sol est portée par le ressort net borné
+    // [-Pa, +Pp] et non par une charge séparée (cf. revue Claude 2026-09-15) — l'inclure ici
+    // recréerait le double-comptage corrigé dans le moteur. On recalcule ici avec la même
+    // quadrature nodale que le moteur (pas une intégrale trapézoïdale continue, qui diverge
+    // légèrement de la coupure nette au fond de fouille) pour que la comparaison soit une
+    // vérification d'équilibre exacte, pas approximative.
     let Pa_integrale = 0;
     let Ma_base_integrale = 0;
-    for (let i = 0; i < prof.length - 1; i++) {
-      const p1 = prof[i];
-      const p2 = prof[i + 1];
-      const dz = Math.abs(p1.cote - p2.cote);
-      const paMoy = (p1.Pa + p2.Pa) / 2;
-      const zMoy = (p1.cote + p2.cote) / 2;
-      Pa_integrale += paMoy * dz;
-      Ma_base_integrale += paMoy * dz * (zMoy - coteBase);
+    for (let i = 0; i < resCalcul.noeuds.length; i++) {
+      const cote = resCalcul.noeuds[i].y;
+      if (cote <= coteFond + 1e-4) continue;
+      const pt = prof.find((p) => Math.abs(p.cote - cote) < 1e-3);
+      const lt = resCalcul.largeursTributaires[i];
+      const chargeNoeud = (pt?.Pa ?? 0) * lt;
+      Pa_integrale += chargeNoeud;
+      Ma_base_integrale += chargeNoeud * (cote - coteBase);
     }
 
     // Résultante totale et moment total donnés par les réactions des ressorts du solveur
@@ -242,7 +249,7 @@ export function executerTestsAcceptationSoutenement(
       nom: 'Cohérence statique phase unique (somme des réactions vs intégrale Pa)',
       phase: 'Brique §8.4',
       description:
-        'Vérifie que la résultante horizontale totale et le moment à la base issus des ressorts du solveur correspondent à l\'intégrale trapézoïdale de Pa(z) (écart de discrétisation < 1%).',
+        'Vérifie que la résultante horizontale totale et le moment à la base issus des réactions de ressorts du solveur équilibrent exactement la charge Pa(z) réellement appliquée au-dessus du fond de fouille (même quadrature nodale que le moteur). Contrôle l\'équilibre global du solveur, pas la pertinence physique du modèle de ressort en fiche (couverte qualitativement par T_PHASE.3 et la revue Claude).',
       valeurAttendue: `R_sol = ${Pa_integrale.toFixed(2)} kN/m, M_base = ${Ma_base_integrale.toFixed(2)} kNm/m`,
       valeurObtenue: `R_solveur = ${R_totale_solveur.toFixed(2)} kN/m, M_solveur = ${MR_base_solveur.toFixed(2)} kNm/m (écarts: R ${ecartRelR.toFixed(3)}%, M ${ecartRelM.toFixed(3)}%)`,
       tolerance: 'Écart relatif < 1.0 % (erreur de discrétisation)',

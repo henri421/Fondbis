@@ -248,8 +248,18 @@ export function calculerParoiPhasee(
       const Pa = pt?.Pa ?? 0;
       const Pp = pt?.Pp ?? 0;
 
-      // Charge motrice active horizontale appliquée vers la fouille (+x)
-      const chargeMotriceX = (Pa + uDiff) * lt;
+      // Charge motrice horizontale vers la fouille (+x).
+      // La pression d'eau différentielle n'est pas bornée par le ressort de sol (celui-ci ne
+      // borne que la part effective Pa/Pp, cf. spec) : elle s'applique donc en charge nodale à
+      // TOUS les nœuds, au-dessus comme en dessous du fond de fouille.
+      // La part active du sol Pa(z), en revanche, n'est appliquée en charge qu'AU-DESSUS du
+      // fond de fouille, là où aucun ressort n'existe (sol excavé côté aval). En dessous, le
+      // ressort net borné [-Pa, +Pp] (cf. spec, "un seul ressort net par nœud") représente déjà
+      // à lui seul toute l'interaction sol des deux faces à partir d'un état initial équilibré :
+      // ajouter Pa en charge à ces nœuds reviendrait à la compter deux fois (une fois comme
+      // charge fixe, une fois comme borne inférieure du ressort), ce qui empêche tout retour de
+      // fiche (bascule/point de rotation) et surestime sensiblement moment et flèche.
+      const chargeMotriceX = (cote > coteFond + 1e-4 ? Pa * lt : 0) + uDiff * lt;
       chargesAppliquees.push({
         noeudIndex: i,
         Fx: chargeMotriceX,
