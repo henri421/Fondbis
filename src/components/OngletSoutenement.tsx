@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ModeleTerrain, OuvrageSoutenement } from '../types/geotech';
 import { verifierMurEnLELU } from '../modules/soutenement/murEnL';
-import { ShieldAlert, ShieldCheck, Layers, ArrowRight } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, Layers, ArrowRight, Shield, Activity } from 'lucide-react';
+import { OngletParoiPhasee } from './soutenement/OngletParoiPhasee';
 
 interface OngletSoutenementProps {
   modele: ModeleTerrain;
@@ -9,7 +10,10 @@ interface OngletSoutenementProps {
 }
 
 export const OngletSoutenement: React.FC<OngletSoutenementProps> = ({ modele, onUpdateSoutenement }) => {
+  const [sousOnglet, setSousOnglet] = useState<'paroiPhasee' | 'murEnL'>('paroiPhasee');
+
   const murActif =
+    modele.ouvrages.soutenements.find((s) => s.type === 'murEnL') ||
     modele.ouvrages.soutenements[0] || {
       id: 'MUR-01',
       nom: 'Mur en L rampe',
@@ -43,8 +47,41 @@ export const OngletSoutenement: React.FC<OngletSoutenementProps> = ({ modele, on
 
   return (
     <div className="space-y-5">
-      {/* 1. Géométrie et Surcharge du Mur en L */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Sélecteur de niveau de modélisation du Module C */}
+      <div className="bg-white border border-slate-200 rounded-xl p-1.5 shadow-xs flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setSousOnglet('paroiPhasee')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition ${
+            sousOnglet === 'paroiPhasee'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Activity className="w-4 h-4 text-emerald-400" />
+          <span>Niveau 2 : Paroi Flexible Phasée (Poutre-ressorts §8.4)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSousOnglet('murEnL')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition ${
+            sousOnglet === 'murEnL'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Shield className="w-4 h-4 text-amber-400" />
+          <span>Niveau 1 : Mur Rigide en L (Équilibre limite §8.3)</span>
+        </button>
+      </div>
+
+      {sousOnglet === 'paroiPhasee' ? (
+        <OngletParoiPhasee modele={modele} onUpdateSoutenement={onUpdateSoutenement} />
+      ) : (
+        <>
+          {/* 1. Géométrie et Surcharge du Mur en L */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs">
           <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
             1. Géométrie du Mur en L (Section 8.2)
@@ -295,6 +332,8 @@ export const OngletSoutenement: React.FC<OngletSoutenementProps> = ({ modele, on
           </div>
         </div>
       </div>
-    </div>
+    </>
+  )}
+</div>
   );
 };

@@ -250,7 +250,7 @@ export default function App() {
             }`}
           >
             <Shield className="w-4 h-4 text-amber-600" />
-            <span>Module C : Soutènements (Mur en L)</span>
+            <span>Module C : Soutènements (Mur & Paroi)</span>
           </button>
 
           <button

@@ -254,23 +254,47 @@ silencieusement) — à traiter à l'écriture de l'onglet UI.
 
 ---
 
+## Onglet UI Paroi Phasée (`src/components/soutenement/OngletParoiPhasee.tsx`) — TERMINÉ
+
+Livré et validé :
+1. **Composant `src/components/soutenement/OngletParoiPhasee.tsx`** :
+   - Visualisation multi-phases dynamique avec sélection d'une phase active ou de la vue enveloppe globale.
+   - Graphiques vectoriels SVG haute performance :
+     - Schéma en coupe géotechnique avec affichage des cotes NGF, de la paroi, du terrain amont, du fond de fouille excavé et des butons/tirants.
+     - Déformée horizontale $u(z)$ en mm.
+     - Moment fléchissant $M(z)$ en kNm/m.
+     - Effort tranchant $V(z)$ en kN/m.
+     - Profil des pressions limites $P_a(z)$ et $P_p(z)$ en kPa.
+     - Superposition en pointillés des courbes de chaque phase dans la vue enveloppe.
+   - Synthèse des grandeurs limites : $u_{\max}$, $M_{\max}$, $V_{\max}$ et taux de mobilisation maximale de la butée (alerte visuelle si $> 80\%$).
+   - Tableau dynamique des réactions d'appuis (butons et tirants) : cote, déplacement gelé à la pose $u_0$, déplacement final $u$, variation $\Delta u$, réaction mobilisée $F$ et ratio de capacité.
+   - Éditeur interactif des paramètres :
+     - Géométrie de la paroi (cote tête, cote base, épaisseur, module $E$).
+     - Définition des phases d'excavation (ajout, suppression, cote de fond de fouille).
+     - Gestion des appuis phasés (cote, raideur $k$, phase d'activation, type buton/tirant).
+     - **Garde-fou UI $k_h$** : tableau de saisie directe de $k_h$ par couche avec distinction visuelle claire (fond ambré + mention explicite si valeur par défaut non personnalisée).
+   - Export des résultats par phase au format CSV.
+2. **Intégration dans `src/components/OngletSoutenement.tsx`** :
+   - Sélecteur de niveau de modélisation : **Niveau 2 (Paroi flexible phasée)** et **Niveau 1 (Mur rigide en L)**.
+   - Mise à jour du libellé dans `src/App.tsx`.
+
+---
+
 ## Prochaines étapes (selon plan)
 
 Dans l'ordre, une tâche Gemini à la fois, chacune revue et testée avant la suivante :
 
-1. **Onglet UI Paroi Phasée** (`src/components/soutenement/OngletParoiPhasee.tsx`) :
-   Visualisation multi-phases, diagrammes $M(z)$, $V(z)$, déformée $u(z)$, profil des pressions limites $P_a / P_p$, tableau des réactions d'appuis et enveloppes.
-2. **Phase 5 — Module B transversal** (`src/modules/pieux/comportementTransversal.ts`) :
+1. **Phase 5 — Module B transversal** (`src/modules/pieux/comportementTransversal.ts`) :
    courbes p-y (Matlock argiles molles, Reese sables), même solveur, convergence Newton sur raideur sécante.
-3. **Groupe de pieux (§7.6)**, complément de la phase 3 restée ouverte : coefficient
+2. **Groupe de pieux (§7.6)**, complément de la phase 3 restée ouverte : coefficient
    d'efficacité, rupture en bloc, tassement de groupe.
-4. **Sensibilité paramétrique (§12.1)** : peut être traitée à tout moment en parallèle,
+3. **Sensibilité paramétrique (§12.1)** : peut être traitée à tout moment en parallèle,
    indépendante du solveur — dérivée numérique sur les paramètres de sol principaux, affichage
    de la dispersion à côté de chaque résultat.
-5. **Phase 6, finalisation** : recherche automatique du cercle critique (grille de centres/
+4. **Phase 6, finalisation** : recherche automatique du cercle critique (grille de centres/
    rayons + raffinement local, déjà en partie présente) et écoulement/réseau simplifié,
    confrontés aux cas de référence publiés (§12.6 — liste à obtenir de l'ingénieur).
-6. **Phase 7** : radier sur ressorts itératifs (§6.6, boucle décrite dans le CDC, réutilise le
+5. **Phase 7** : radier sur ressorts itératifs (§6.6, boucle décrite dans le CDC, réutilise le
    solveur de plaque à mutualiser avec la brique matricielle), export vers les modules
    structuraux (format d'échange à définir avec Aedificium/Structura).
 
