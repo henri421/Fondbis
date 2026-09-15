@@ -260,20 +260,12 @@ export function verifierPieuAxial(
   ouvrage: OuvragePieu,
   couches: CoucheGeotechnique[],
   config: ConfigurationNormative,
-  campagnes?: any
+  hydrogeologie: Hydrogeologie,
+  campagnes?: any // TODO (revue Claude 2026-09-15) : pas encore utilisé — voir DEVPLAN.md,
+  // dérivation de Rc;calc depuis un vrai profil CPT/PMT/SPT à faire (§7.4 CDC), la
+  // capacité utilise pour l'instant une estimation à partir de c'/φ'/cu des couches
 ): ResultatVerificationPieuAxial {
-  const hydroDefaut: Hydrogeologie = {
-    nappePrincipale: {
-      coteCaracteristique: 98,
-      coteDefavorableELU: 99,
-      regime: 'hydrostatique',
-    },
-    gradientVertical: null,
-    nappesSecondaires: [],
-    poidsVolumiqueEau: 9.81,
-  };
-
-  const resCapacite = calculerCapacitePieu(ouvrage, couches, hydroDefaut, config);
+  const resCapacite = calculerCapacitePieu(ouvrage, couches, hydrogeologie, config);
 
   const perimetreFût = Math.PI * ouvrage.diametre;
   const detailsCouches: ResultatVerificationPieuAxial['detailsCouches'] = [];

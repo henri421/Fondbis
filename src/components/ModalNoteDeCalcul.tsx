@@ -36,7 +36,7 @@ export const ModalNoteDeCalcul: React.FC<ModalNoteDeCalculProps> = ({ modele, on
     : null;
 
   const resPieu = pieu
-    ? verifierPieuAxial(pieu, modele.couches, modele.configurationNormative, modele.campagnes)
+    ? verifierPieuAxial(pieu, modele.couches, modele.configurationNormative, modele.hydrogeologie, modele.campagnes)
     : null;
 
   const resMur = mur

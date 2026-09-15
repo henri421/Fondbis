@@ -66,6 +66,7 @@ export const OngletPieux: React.FC<OngletPieuxProps> = ({ modele, onUpdatePieu }
     pieuActif,
     modele.couches,
     modele.configurationNormative,
+    modele.hydrogeologie,
     modele.campagnes
   );
 

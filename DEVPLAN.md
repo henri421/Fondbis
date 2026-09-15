@@ -43,7 +43,7 @@ traitée en parallèle, ne dépend de rien d'autre.
 | 0 | Noyau : stratigraphie, nappe, profil de contraintes, config normative | ✅ Validé (T0.1, T0.2) |
 | 1 | Module A : radier, portance ELU, glissement, tassement ELS | ✅ Validé (T1.1-T1.3), UPL/HYD inclus |
 | 2 | Module C niveau 1 : mur en L | ✅ Validé (T2.1) |
-| 3 | Module B : pieu axial isolé puis groupe | ✅ Isolé (T3.1) et groupe (T3.2 — efficacité, bloc, tassement) validés |
+| 3 | Module B : pieu axial isolé puis groupe | ⚠️ T3.1/T3.2 validés **sur profils fournis explicitement** ; **`verifierPieuAxial` (le vrai chemin UI) ignore encore les campagnes CPT/PMT/SPT réelles et fabrique 3 profils synthétiques** — voir revue ci-dessous |
 | — | Brique §9.3 solveur matriciel | ✅ Durci et validé (13/13 T_SOLV.1-6) |
 | — | Brique §8.2 profil de pression limite | ✅ Livrée et revue par Claude (14/14, T_PRESS.1) |
 | 4 | Module C niveau 2 : phasage et coefficient de réaction | ✅ Moteur + onglet UI livrés, revus par Claude (bug de double-comptage corrigé), 18/18 validés |
@@ -345,6 +345,55 @@ noyau une prochaine fois qu'on touche ce fichier.
 
 **À ne pas considérer comme validé pour un usage réglementaire** : la voie pressiométrique,
 tant que le câblage `CampagneEssai` n'existe pas (avertissement déjà en place en attendant).
+
+---
+
+## Constat d'audit (2026-09-15) : la capacité axiale des pieux n'utilise aucune vraie donnée d'essai
+
+Trouvé en répondant à une question d'Henri sur les types de données de reconnaissance
+(pressiométrique, CPT, autres) — **pas une régression d'une livraison Gemini récente, ce
+comportement était déjà là**, sous une phase 3 pourtant marquée validée.
+
+**Ce qui a été trouvé.** `verifierPieuAxial` — la fonction réellement appelée par
+`OngletPieux.tsx` et `ModalNoteDeCalcul.tsx`, donc le vrai chemin utilisateur — recevait bien
+`modele.campagnes` (CPT/CPTu/SPT/DPSH/PMT, avec `qc`/`fs`/`u2`/`N`/`EM`/`plNette` par
+profondeur) en paramètre, mais **ne l'utilisait jamais** dans le corps de la fonction. Pire :
+elle appelait `calculerCapacitePieu` avec une **hydrogéologie codée en dur** (nappe à la cote
+98/99) au lieu de `modele.hydrogeologie` — la nappe réelle du projet n'avait donc aucune
+influence sur la capacité de pieu affichée. Corrigé immédiatement (sans attendre une tâche
+Gemini, correctif ciblé et sans ambiguïté) : `verifierPieuAxial` prend maintenant la vraie
+`hydrogeologie` en paramètre — `campagnes` reste non branché, marqué `TODO` explicite dans le
+code, voir ci-dessous.
+
+**Ce qui reste faux, plus profond** : quand aucun `Rc;calc` par profil n'est fourni
+explicitement (c'est-à-dire toujours, dans l'UI réelle — seuls les tests T3.1/T3.2 passent
+des profils en dur), `calculerCapacitePieu` (dans `capaciteAxiale.ts`) :
+1. Estime `qb_k` et `qs_k` par des formules maison non sourcées (`qb_k = 3000 si φ'>28°
+   sinon 9·cu`, `qs_k = min(100, 2.5·φ')` pour sable, `min(80, 0.5·cu)` pour argile) — pas
+   les formulations du §7.4 du CDC (dérivation depuis le profil de pointe CPT, avec facteurs
+   de type de pointe/effet d'échelle/mode d'exécution/catégorie de sol, à fournir par
+   l'ingénieur).
+2. **Fabrique ensuite 3 « profils » à partir de cette unique estimation, dispersés
+   artificiellement à ±5 %/±2 %** — le commentaire dans le code dit littéralement
+   « pour illustrer la norme ». Résultat : la voie 2 de l'EC7 (`Rc;k = min(moyenne/ξ3,
+   min/ξ4)`, conçue pour récompenser un nombre réel de profils d'essai indépendants) reçoit
+   toujours artificiellement `n=3`, quel que soit le nombre réel de sondages du projet (0, 1
+   ou 10) — exactement le type de résultat faux-silencieux que le CDC §10/§13 interdit.
+
+**Lien avec la question d'Henri et sa remarque « il faudra pouvoir saisir toutes sortes de
+paramètres »** : c'est exactement ce qui manque. Le modèle de données est déjà prêt
+(`CampagneEssai` gère CPT/CPTu/SPT/DPSH/PMT), mais rien ne relie ces essais aux calculs de
+portance de pieu, et plus largement le CDC ne prévoit une méthode alternative (pressiométrique
+ou CPT directe, sans passer par c'/φ') nulle part pour le radier (§6) ou le soutènement (§8) —
+seul le §7.4 (pieux) l'anticipe explicitement, et seulement pour la CPT, pas pour le PMT.
+
+**Pas engagé maintenant** : la vraie dérivation CPT (§7.4) dépend d'une méthode/table de
+corrélation que le CDC demande explicitement de faire fournir par l'ingénieur (LCPC/Bustamante-
+Gianeselli, DTU 13.2, ou autre — ça varie selon la pratique régionale et ce n'est pas à Claude
+ni à Gemini de choisir). **Prochaine étape avec Henri** : décider quelle méthode de corrélation
+utiliser avant d'envoyer cette tâche à Gemini, et cadrer plus généralement la façon dont l'app
+doit accepter plusieurs familles de paramètres d'entrée (c'/φ' direct, CPT, PMT, SPT) pour un
+même calcul plutôt que d'en imposer une seule.
 
 ---
 
