@@ -735,16 +735,48 @@ simple manque d'itérations.
 6. **Ne pas toucher** aux parties A (sensibilité) et B (stabilité/hydraulique) de la
    précédente livraison — déjà revues et acceptées, aucune régression attendue ni tolérée.
 
+## Tâche envoyée à Gemini (2026-09-16) : saisie directe des profils d'essai pieux (§7.6.2.3)
+
+**Décision (Claude, à la demande d'Henri « choisis au mieux »).** Ne pas implémenter de
+table de corrélation CPT régionale (LCPC/Bustamante-Gianeselli, NF P94-262, DTU 13.2…) dans
+le code : ça varie selon la pratique de l'ingénieur, et coder une table sans la faire vérifier
+serait exactement le type de coefficient inventé que le CDC §13 interdit — ce que cette
+revue a déjà reproché à plusieurs livraisons Gemini aujourd'hui. À la place : **saisie
+directe de Rc;calc par profil d'essai**, sur le principe déjà retenu pour `kh` en paroi
+phasée (CDC §8.4, « saisie directe en alternative »). L'ingénieur calcule déjà ces valeurs
+avec sa propre méthode (logiciel dédié, tableur, table régionale) ; le rôle de l'app est
+d'appliquer correctement la corrélation ξ3/ξ4 de la voie 2 (§7.6.2.3) — ce qu'elle sait déjà
+faire (`T3.1` validé) une fois les vrais `Rc;calc` fournis.
+
+1. **UI dans `OngletPieux.tsx`** : nouvelle section « Profils d'essai (Rc;calc) », sur le
+   modèle des tableaux existants (ajout/suppression de lignes, comme les phases de
+   `OngletParoiPhasee`). Chaque ligne : une valeur `Rc;calc` (kN) et un libellé libre
+   (référence du sondage/essai). Ces valeurs alimentent directement le paramètre
+   `profilsEssaisCalcules` déjà existant de `calculerCapacitePieu` — pas de nouvelle logique
+   de calcul de corrélation à écrire, elle existe déjà et est testée (`T3.1`).
+2. **Retirer la fabrication de 3 profils synthétiques.** Dans `capaciteAxiale.ts`, quand
+   aucun profil n'est saisi : ne plus disperser artificiellement une seule estimation en 3
+   (`rcTotal * 0.95/1.05/0.98`) — utiliser cette estimation comme **un seul** profil
+   (`n=1`), avec `ξ3`/`ξ4` correspondants (plus défavorables, honnêtes). Ajouter un
+   avertissement explicite (comme pour la voie pressiométrique du pieu transversal, déjà
+   fait cette session) : « Estimation indicative depuis φ'/c'/cu des couches, pas un vrai
+   profil d'essai — saisir les Rc;calc réels pour une valeur normative fiable. »
+3. **Ne pas toucher** à la dérivation qb_k/qs_k elle-même (formules `capaciteAxiale.ts`
+   lignes ~84-106) au-delà du point 2 — ce n'est pas le sujet de cette tâche, et rien n'a été
+   décidé sur une méthode de dérivation automatique CPT/PMT pour l'instant.
+4. **Test** : vérifier qu'avec 3 profils saisis manuellement, le résultat est identique à un
+   appel direct de `calculerCapacitePieu(..., [profils])` (déjà couvert par `T3.1`/`T3.2` au
+   niveau du moteur — ajouter seulement un test UI/wiring léger si pertinent, pas dupliquer
+   la couverture normative).
+
 ## Prochaines étapes (selon plan)
 
-1. **Dérivation CPT/PMT/SPT pour la capacité axiale des pieux (§7.4)** — en attente du choix
-   de méthode par Henri (LCPC/Bustamante-Gianeselli, DTU 13.2, etc. — voir « Constat d'audit »
-   plus haut). Ne pas envoyer à Gemini avant cette décision. Périmètre déjà identifié :
-   remplacer les formules de substitution empiriques non sourcées par une vraie dérivation
-   depuis les profils CPT/pressiomètre réels, et la dispersion artificielle à 3 sondages par
-   le calcul de ξ3/ξ4 sur le nombre effectif de sondages du projet.
-2. **Groupe de pieux (§7.6)** : a priori clos après la revue ci-dessus (Converse-Labarre
+1. **Groupe de pieux (§7.6)** : a priori clos après la revue précédente (Converse-Labarre
    vérifié à la main) — reconfirmer si un point spécifique est soulevé par Henri.
+2. **Dérivation CPT/PMT automatique (§7.4)**, si un jour souhaitée en complément de la saisie
+   directe ci-dessus — nécessiterait qu'Henri fournisse la méthode/table exacte de sa
+   pratique (voir « Constat d'audit » plus haut). Pas urgent : la saisie directe couvre déjà
+   le besoin normatif.
 
 ## Wiring restant (hors code de calcul)
 
