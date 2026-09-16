@@ -1,0 +1,36 @@
+[
+  {
+    "id": "STAB-REF-00",
+    "nom": "Cas de référence Talus homogène (Placeholder)",
+    "source": "PLACEHOLDER - a remplacer par un cas fourni par l'ingenieur",
+    "description": "Structure de test prête pour charger les cas de référence de la littérature géotechnique ou validés par l'ingénieur conseil.",
+    "geometrieTalus": [
+      { "x": 0, "y": 10 },
+      { "x": 10, "y": 10 },
+      { "x": 20, "y": 5 },
+      { "x": 40, "y": 5 }
+    ],
+    "couches": [
+      {
+        "id": "C1",
+        "nom": "Sol meuble",
+        "coteToit": 10,
+        "epaisseur": 15,
+        "gamma": 19.0,
+        "phiPrime": 25.0,
+        "cPrime": 5.0
+      }
+    ],
+    "nappe": {
+      "active": false,
+      "cote": 0
+    },
+    "cercleTest": {
+      "centreX": 15,
+      "centreY": 18,
+      "rayon": 14.5
+    },
+    "facteurSecuriteAttendu": null,
+    "tolerancePourcent": 3.0
+  }
+]

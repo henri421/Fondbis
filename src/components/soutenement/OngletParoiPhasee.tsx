@@ -12,6 +12,8 @@ import {
   ResultatCalculParoiPhasee,
   ResultatPhaseParoi,
 } from '../../modules/soutenement/paroiPhasee';
+import { verifierRenardFondDeFouille } from '../../briques/hydraulique';
+import { trouverCoucheACote } from '../../core/profilContraintes';
 import {
   Layers,
   ArrowRight,
@@ -168,6 +170,26 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
     resultatCalcul && resultatCalcul.phases.length > 0
       ? resultatCalcul.phases[phaseIndexEffectif]
       : null;
+
+  // Vérification de la sécurité au Renard Hydraulique en fond de fouille (CDC §9.2 / EC7 UPL/HYD)
+  const verifRenard = useMemo(() => {
+    if (!phaseCourante) return null;
+    const coteFouille = phaseCourante.phase.coteFondFouille;
+    const ficheT = coteFouille - coteBase;
+    if (ficheT <= 0.1) return null;
+
+    const coteNappeAmont =
+      phaseCourante.phase.hydrogeologieAmont?.nappePrincipale.coteCaracteristique ??
+      modele.hydrogeologie.nappePrincipale.coteCaracteristique;
+
+    if (coteNappeAmont <= coteFouille) return null;
+
+    const coucheFond = trouverCoucheACote(modele.couches, coteFouille - 0.1) || modele.couches[0];
+    const gammaSat = coucheFond?.poidsVolumiques.gammaSature.v ?? 20.0;
+    const gammaEau = modele.hydrogeologie.poidsVolumiqueEau || 9.81;
+
+    return verifierRenardFondDeFouille(gammaSat, coteNappeAmont, coteFouille, ficheT, gammaEau);
+  }, [phaseCourante, coteBase, modele.hydrogeologie, modele.couches]);
 
   // Gestion des modifications de phases
   const handleAddPhase = () => {
@@ -355,7 +377,7 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
 
       {/* 2. Métriques clés et alertes de la phase visualisée */}
       {resultatCalcul && phaseCourante && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className={`grid grid-cols-2 ${verifRenard ? 'sm:grid-cols-3 lg:grid-cols-5' : 'sm:grid-cols-4'} gap-3`}>
           {/* Déplacement max */}
           <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
             <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
@@ -436,6 +458,39 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
                 : 'Attention : plastification limite !'}
             </div>
           </div>
+
+          {/* Renard de fond de fouille (HYD / Renard) */}
+          {verifRenard && (
+            <div
+              className={`p-3 border rounded-xl shadow-xs ${
+                verifRenard.securiteConforme
+                  ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                  : 'bg-rose-50/70 border-rose-200 text-rose-950'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-wider">
+                  Renard fond fouille (HYD)
+                </span>
+                {verifRenard.securiteConforme ? (
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                ) : (
+                  <ShieldAlert className="w-4 h-4 text-rose-600" />
+                )}
+              </div>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-xl font-black">
+                  F = {verifRenard.facteurSecuriteRenard.toFixed(2)}
+                </span>
+                <span className="text-xs font-semibold">
+                  {verifRenard.securiteConforme ? '≥ 1.5 OK' : '< 1.5 Risque'}
+                </span>
+              </div>
+              <div className="mt-1 text-[10px] font-medium">
+                i_crit = {verifRenard.i_critique.toFixed(2)} / i = {verifRenard.i_ecoulement.toFixed(2)} (ΔH = {verifRenard.perteDeChargeDeltaH.toFixed(1)}m)
+              </div>
+            </div>
+          )}
         </div>
       )}
 

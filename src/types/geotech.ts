@@ -238,6 +238,7 @@ export interface ModeleTerrain {
     commentaires: string;
   };
   referentiel: Referentiel;
+  profilTerrainNaturel?: Array<{ x: number; y: number }> | null; // Polyligne de profil réel du talus
   hydrogeologie: Hydrogeologie;
   couches: CoucheGeotechnique[];
   campagnes: CampagneEssai[];
