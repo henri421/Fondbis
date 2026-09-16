@@ -687,3 +687,15 @@ résultat retourné par `calculerRadierSurRessortsIteratifs`.
   responsabilité réglementaire, cf. §13 du CDC). Repasser en public + GitHub Pages, à
   l'anonyme `henri421` comme le reste de la suite, une fois mûr.
 - Une fois public : ajouter l'entrée dans `Structura/index.html` (hub WebAedificium).
+
+**Correctif (2026-09-16, Claude) : accès PWA en sous-répertoire GitHub Pages.** `vite.config.ts`
+et `index.html` utilisaient des chemins absolus (`/…`) pour tous les assets, le manifest
+(`start_url`/`scope`/icônes) et le service worker — violation du CDC §3.3 (« Chemins relatifs
+uniquement, pour permettre un hébergement sous sous-répertoire »), et incohérent avec les
+autres suites (STM etc., déjà en `./`). Une fois déployé sous
+`henri421.github.io/<repo>/`, ça aurait cassé le chargement des assets et l'installation PWA.
+Corrigé : `base: './'` ajouté à `vite.config.ts`, manifest (`id`, `start_url`, `scope`,
+`icons[].src`) et `index.html` (icônes, script d'entrée) passés en chemins relatifs. Vérifié
+sur le build (`dist/index.html`, `dist/manifest.webmanifest`, `dist/sw.js`) : tous les
+chemins sont désormais relatifs (`./assets/…`, `pwa-192x192.png` sans slash initial, etc.).
+28/28 tests, lint et build inchangés (aucun impact sur le code de calcul).

@@ -6,6 +6,9 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
+    // Chemins relatifs uniquement (CDC §3.3) : permet l'hébergement sous sous-répertoire
+    // (GitHub Pages, ex. henri421.github.io/Fondbis/) sans casser les assets ni le manifest.
+    base: './',
     plugins: [
       react(),
       tailwindcss(),
@@ -13,30 +16,30 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
         manifest: {
-          id: '/',
+          id: '.',
           name: 'GeoTech EC7 - Calculs Géotechniques Eurocode 7',
           short_name: 'GeoTechEC7',
           description: "Application PWA d'ingénierie géotechnique conforme à l'Eurocode 7 (EN 1997-1:2004).",
           theme_color: '#0f172a',
           background_color: '#0f172a',
           display: 'standalone',
-          start_url: '/',
-          scope: '/',
+          start_url: './',
+          scope: './',
           icons: [
             {
-              src: '/pwa-192x192.png',
+              src: 'pwa-192x192.png',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: '/pwa-512x512.png',
+              src: 'pwa-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: '/pwa-maskable-512x512.png',
+              src: 'pwa-maskable-512x512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable',
