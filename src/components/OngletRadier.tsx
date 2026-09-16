@@ -2,7 +2,20 @@ import React, { useState } from 'react';
 import { ModeleTerrain, OuvrageRadier } from '../types/geotech';
 import { verifierPortanceRadierELU } from '../modules/radier/portanceELU';
 import { calculerTassementRadierELS } from '../modules/radier/tassementELS';
-import { ShieldAlert, ShieldCheck, HelpCircle, Check, AlertTriangle, ArrowRight } from 'lucide-react';
+import { calculerRadierSurRessortsIteratifs } from '../modules/radier/radierSurRessortsIteratifs';
+import {
+  ShieldAlert,
+  ShieldCheck,
+  HelpCircle,
+  Check,
+  AlertTriangle,
+  ArrowRight,
+  Layers,
+  Download,
+  Copy,
+  CheckCircle2,
+  AlertCircle,
+} from 'lucide-react';
 
 interface OngletRadierProps {
   modele: ModeleTerrain;
@@ -10,6 +23,10 @@ interface OngletRadierProps {
 }
 
 export const OngletRadier: React.FC<OngletRadierProps> = ({ modele, onUpdateRadier }) => {
+  const [afficherSolStructure, setAfficherSolStructure] = useState(true);
+  const [maillageN, setMaillageN] = useState<number>(8);
+  const [copiePressePapier, setCopiePressePapier] = useState(false);
+
   const radierActif =
     modele.ouvrages.radiers[0] || {
       id: 'RAD-01',
@@ -54,6 +71,25 @@ export const OngletRadier: React.FC<OngletRadierProps> = ({ modele, onUpdateRadi
     modele.couches,
     modele.hydrogeologie
   );
+
+  const resRessorts = calculerRadierSurRessortsIteratifs(
+    radierActif,
+    modele.couches,
+    modele.hydrogeologie,
+    {
+      nx: maillageN,
+      ny: maillageN,
+      maxIterations: 15,
+      toleranceConvergence: 0.01,
+      facteurRelaxation: 0.5,
+    }
+  );
+
+  const copierExportJSON = () => {
+    navigator.clipboard.writeText(resRessorts.exportStructuralJSON);
+    setCopiePressePapier(true);
+    setTimeout(() => setCopiePressePapier(false), 2500);
+  };
 
   return (
     <div className="space-y-5">
@@ -446,6 +482,177 @@ export const OngletRadier: React.FC<OngletRadierProps> = ({ modele, onUpdateRadi
             </div>
           </div>
         </div>
+      </div>
+
+      {/* 4. Modélisation Sol-Structure avancée (Plaque 2D sur ressorts non-linéaires couplés — CDC §6.6) */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+        <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-emerald-600" />
+            <span className="font-bold text-slate-900 text-sm">
+              4. Couplage Sol-Structure — Radier sur ressorts itératifs (CDC §6.6)
+            </span>
+            <span className="text-[11px] bg-slate-200/80 text-slate-700 font-mono px-2 py-0.5 rounded-full">
+              Solveur direct Gauss ∇⁴w + ks·w = q
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 text-xs text-slate-600">
+              <label htmlFor="select-maillage" className="font-medium">Maillage :</label>
+              <select
+                id="select-maillage"
+                value={maillageN}
+                onChange={(e) => setMaillageN(parseInt(e.target.value, 10))}
+                className="px-2 py-1 border border-slate-300 rounded bg-white text-xs font-semibold text-slate-800"
+              >
+                <option value={4}>4 × 4 (25 nœuds)</option>
+                <option value={6}>6 × 6 (49 nœuds)</option>
+                <option value={8}>8 × 8 (81 nœuds - standard)</option>
+                <option value={10}>10 × 10 (121 nœuds)</option>
+                <option value={12}>12 × 12 (169 nœuds - fin)</option>
+              </select>
+            </div>
+
+            <button
+              onClick={() => setAfficherSolStructure(!afficherSolStructure)}
+              className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition"
+            >
+              {afficherSolStructure ? 'Masquer détails' : 'Afficher détails'}
+            </button>
+          </div>
+        </div>
+
+        {afficherSolStructure && (
+          <div className="p-4 space-y-4">
+            {/* Statut de convergence & Avertissements */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                {resRessorts.convergence.convergé ? (
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-full">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    Convergé en {resRessorts.convergence.nbIterations} itérations (Écart final : {resRessorts.convergence.ecartFinalRelatif} % &lt; 1%)
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-amber-800 bg-amber-100 px-2.5 py-1 rounded-full">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    Non convergé après {resRessorts.convergence.nbIterations} itérations (Écart : {resRessorts.convergence.ecartFinalRelatif} %)
+                  </span>
+                )}
+                <span className="text-xs text-slate-500">
+                  Sous-relaxation : 0.5 • Tolérance relative : 1.0 %
+                </span>
+              </div>
+
+              <button
+                onClick={copierExportJSON}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold shadow-xs transition"
+              >
+                {copiePressePapier ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    Export copié !
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    Exporter format structural (JSON)
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Avertissements du solveur / de la boucle */}
+            {resRessorts.convergence.avertissements && resRessorts.convergence.avertissements.length > 0 && (
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg text-xs text-amber-900 space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
+                  Avertissements du solveur de plaque couplé :
+                </div>
+                <ul className="list-disc list-inside space-y-0.5 text-amber-800 pl-1">
+                  {resRessorts.convergence.avertissements.map((av, idx) => (
+                    <li key={idx}>{av}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Indicateurs clés du couplage */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <span className="text-slate-500 block mb-1">Tassement max / min (w)</span>
+                <span className="text-base font-extrabold text-slate-900">
+                  {resRessorts.champs.tassementMax_mm} / {resRessorts.champs.tassementMin_mm} mm
+                </span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <span className="text-slate-500 block mb-1">Tassement différentiel (Δs)</span>
+                <span className="text-base font-extrabold text-emerald-700">
+                  {resRessorts.champs.tassementDifferentielMax_mm} mm
+                </span>
+                <span className="block text-[10px] text-slate-500 mt-0.5">
+                  Distorsion : 1 / {Math.round(1 / (resRessorts.champs.distorsionAngulaireMax || 1e-6))}
+                </span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <span className="text-slate-500 block mb-1">Pression sol max / min</span>
+                <span className="text-base font-extrabold text-slate-900">
+                  {resRessorts.champs.pressionContactMax_kPa} / {resRessorts.champs.pressionContactMin_kPa} kPa
+                </span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <span className="text-slate-500 block mb-1">Module réaction ks sol</span>
+                <span className="text-base font-extrabold text-slate-900">
+                  {resRessorts.sol.ksFinalMoyen} kN/m³
+                </span>
+                <span className="block text-[10px] text-slate-500 mt-0.5">
+                  Initial : {resRessorts.sol.ksInitialMoyen} kN/m³
+                </span>
+              </div>
+            </div>
+
+            {/* Historique des itérations */}
+            <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <div className="px-3 py-1.5 bg-slate-100 border-b border-slate-200 text-xs font-semibold text-slate-700">
+                Convergence itérative Sol-Structure (Actualisation des ressorts locaux de Winkler)
+              </div>
+              <div className="max-h-48 overflow-y-auto">
+                <table className="w-full text-left text-xs border-collapse font-mono">
+                  <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 sticky top-0">
+                    <tr>
+                      <th className="p-2 font-medium font-sans">Itération</th>
+                      <th className="p-2 font-medium text-right font-sans">s_max (mm)</th>
+                      <th className="p-2 font-medium text-right font-sans">Δs différentiel (mm)</th>
+                      <th className="p-2 font-medium text-right font-sans">p_contact max (kPa)</th>
+                      <th className="p-2 font-medium text-right font-sans">Écart relatif</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {resRessorts.convergence.historique.map((it) => (
+                      <tr key={it.numero} className="hover:bg-slate-50">
+                        <td className="p-2 font-sans font-medium text-slate-700">Itération {it.numero}</td>
+                        <td className="p-2 text-right font-bold text-slate-800">{it.flecheMax_mm.toFixed(2)}</td>
+                        <td className="p-2 text-right text-emerald-700 font-semibold">{it.tassementDiff_mm.toFixed(2)}</td>
+                        <td className="p-2 text-right text-slate-700">{it.pressionMax_kPa.toFixed(1)}</td>
+                        <td className="p-2 text-right">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              it.ecartRelatifMax <= 1.0
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            {it.ecartRelatifMax.toFixed(2)} %
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

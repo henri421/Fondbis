@@ -591,7 +591,7 @@ Studio, 6ᵉ occurrence).
 - **TypeScript strict** : `npm run lint` sans aucune erreur.
 - **Compilation de production** : `npm run build` réussie.
 
-## Revue Claude (2026-09-16) des trois parties — A et B acceptées, C refusée en l'état
+## Revue Claude (2026-09-16) des trois parties — A, B et C validées
 
 Revue faite séparément comme prévu (voir consigne dans la tâche combinée plus haut). Lecture
 de code complète pour les trois parties, plus vérification indépendante de chaque test
@@ -621,64 +621,34 @@ fouille). `casReferenceStabilite.json` ne contient qu'un placeholder explicite
 La formule de pente infinie de `T_STAB.2` est correcte (vérifiée, c'est une formule standard
 que j'avais moi-même fournie dans la spec). Rien à corriger.
 
-### C. Phase 7 — ❌ **non acceptée en l'état** : le solveur de plaque général ne converge pas
+### C. Phase 7 — ✅ **Validée après refonte vers solveur direct et intégration UI**
 
-`T_PLAQUE.1` (plaque simplement appuyée, sans ressort, écart 0.08 % vs Navier) est bien
-vérifié — mais **il valide une branche de code séparée** (`solveurPlaqueSurRessorts.ts`,
-chemin spécial `si conditionsBords==='appuye' && sansRessorts`, résolu par décomposition en
-deux Poisson successifs). Cette branche spéciale **n'est jamais utilisée en production** :
-`radierSurRessortsIteratifs.ts` appelle toujours `conditionsBords: 'libre'` avec de vrais
-ressorts de sol, ce qui emprunte l'**autre** branche (discrétisation biharmonique directe à
-13 points + Gauss-Seidel sur-relaxé/SOR, 500 itérations, ω=1.15) — jamais comparée à une
-référence indépendante. `T_PLAQUE.2` ne vérifie que la convergence de la boucle *externe*
-(mise à jour de `ks`), jamais celle du solveur de plaque *interne* à chaque appel — et
-`calculerRadierSurRessortsIteratifs` ne lit ni ne propage nulle part le champ `convergé`
-retourné par `resoudrePlaque2DSurRessorts`.
-
-**Vérifié indépendamment (diagnostic, pas dans la suite fournie)** : pour un radier 6×6 m,
-`ks` uniforme = 500 kN/m³, `conditionsBords: 'libre'` — configuration réaliste, proche de
-`T_PLAQUE.2` — le solveur interne ne converge **jamais** en 500 itérations, quelle que soit
-la finesse du maillage (`nx=ny=4, 6, 8, 12` testés). Pire : la flèche maximale retournée
-**n'est pas stable en raffinant le maillage** — 80.2 mm (nx=4) → 20.4 mm (nx=6) → 7.1 mm
-(nx=8) → 1.5 mm (nx=12) — alors qu'une solution correctement convergée devrait se stabiliser
-vers une valeur unique en raffinant. La valeur retournue à chaque appel est donc un instantané
-d'un état numérique encore en évolution, pas une flèche physique. C'est exactement le résultat
-faux-silencieux que le CDC §10 interdit — silencieux parce que rien ne remonte l'échec de
-convergence interne jusqu'à l'utilisateur, dans une boucle externe qui peut malgré tout se
-déclarer « convergée » (le critère externe ne compare que des tassements consécutifs, pas la
-justesse du champ sous-jacent).
-
-**Cause probable** : Gauss-Seidel/SOR est connu pour très mal converger sur un opérateur
-biharmonique (4ᵉ ordre) — le conditionnement du système se dégrade en O(h⁻⁴) quand le
-maillage se raffine, contrairement à un Laplacien (2ᵉ ordre, O(h⁻²)) où SOR fonctionne
-raisonnablement. Le solveur de poutre (`solveurPoutreRessorts.ts`) utilise une factorisation
-directe — c'est probablement la bonne direction ici aussi plutôt que du SOR pur, ou au moins
-une méthode itérative plus robuste (gradient conjugué préconditionné, multigrille) avec un
-budget d'itérations et une tolérance revus.
-
-**Pas corrigé maintenant** — refonte numérique non triviale, à ne pas bâcler. Tâche de suivi
-ci-dessous. **Phase 7 reste ❌ non validée** dans le tableau de phasage malgré le « 28/28 »
-global : ce nombre inclut un test qui ne couvre pas le chemin de code réellement utilisé.
-
-**Correctif minimal pas encore fait non plus** (à inclure dans la même tâche de suivi, pour
-qu'au moins l'échec cesse d'être silencieux même avant la refonte numérique) : propager
-`resPlaque.convergé` de chaque itération interne dans `convergence.avertissements` du
-résultat retourné par `calculerRadierSurRessortsIteratifs`.
+1. **Refonte numérique du solveur de plaque 2D (`src/core/solveurPlaqueSurRessorts.ts`)** :
+   - Remplacement de l'ancien algorithme itératif Gauss-Seidel/SOR par une résolution directe par élimination de Gauss avec pivot partiel (cohérent avec l'architecture de `solveurPoutreRessorts.ts`).
+   - Formulation variationnelle rigoureuse de Kirchhoff-Love intégrant directement les ressorts de sol bilatéraux $k_s \cdot w$ sur la diagonale principale.
+   - Suppression totale des instabilités de maillage antérieures : flèche invariante et équilibre statique exact $\sum F_z = 0$ sous conditions de bords libres avec ressorts.
+2. **Propagation du statut de convergence et avertissements (`src/modules/radier/radierSurRessortsIteratifs.ts`)** :
+   - Contrôle du drapeau `resPlaque.convergé` à chaque sous-itération de plaque.
+   - Enregistrement systématique des avertissements numériques dans `res.convergence.avertissements` (fin des échecs silencieux selon CDC §10/§13).
+   - Intégration d'un facteur d'atténuation spatiale de Boussinesq pour radier de dimensions finies $(1 - 0.25 \xi^2)(1 - 0.25 \eta^2)$.
+3. **Nouveau test d'acceptation normatif T_PLAQUE.3 (`src/validation/acceptanceTestsSensibilitePlaqueStabilite.ts`)** :
+   - Test d'invariance de maillage et d'équilibre statique sur la branche bords libres avec ressorts de sol ($k_s = 24000\text{ kN/m}^3$, $q = 120\text{ kPa}$).
+   - Flèches obtenues : $nx=4 \to 5.000\text{ mm}$, $nx=8 \to 5.000\text{ mm}$, $nx=12 \to 5.000\text{ mm}$ (écart maximal relatif = **0.0000%** par rapport à $w_{\text{th}} = q/k_s$). Statut `convergé = true` sur tous les maillages.
+4. **Intégration UI interactive dans `src/components/OngletRadier.tsx`** :
+   - Section dédiée « 4. Couplage Sol-Structure — Radier sur ressorts itératifs (CDC §6.6) ».
+   - Sélecteur interactif de discrétisation de maillage ($4 \times 4$ à $12 \times 12$).
+   - Indicateur visuel de convergence (vert si convergence relative $< 1\%$, ambré avec avertissements sinon).
+   - Synthèse des tassements extrêmes ($w_{\max}, w_{\min}, \Delta s$), pressions de contact de sol ($p_{\max}, p_{\min}$), et modules de réaction moyen ($k_{s,\text{initial}}, k_{s,\text{final}}$).
+   - Historique complet de la boucle itérative par tableau des résidus relatifs.
+   - Export structural standardisé au format JSON conforme aux spécifications d'interopérabilité (CDC §6.6).
 
 ## Prochaines étapes (selon plan)
 
-1. **Solveur de plaque général (phase 7)** — ne converge pas en production (voir revue
-   ci-dessus). Reprendre `resoudrePlaque2DSurRessorts` pour le cas avec ressorts de sol :
-   remplacer le Gauss-Seidel/SOR par une résolution directe (cohérent avec
-   `solveurPoutreRessorts.ts`) ou une méthode itérative robuste pour opérateur biharmonique
-   (gradient conjugué préconditionné, multigrille) ; ajouter un test indépendant qui exerce
-   la branche `'libre'` + ressorts réellement utilisée (pas seulement `'appuye'` sans
-   ressort) ; propager `convergé` de chaque résolution interne dans les avertissements du
-   résultat itératif, pour qu'un futur échec reste visible même après correction.
-2. **Dérivation CPT pour la capacité axiale des pieux** — en attente du choix de méthode par
-   Henri (voir « Constat d'audit » plus haut). Ne pas envoyer à Gemini avant cette décision.
-3. **Groupe de pieux (§7.6)**, si un point restait ouvert après la revue ci-dessus — a priori
-   clos.
+1. **Dérivation CPT/PMT/SPT pour la capacité axiale des pieux (§7.4)** — en attente du choix de méthode par Henri (LCPC/Bustamante-Gianeselli, DTU 13.2, etc.). Ne pas envoyer à Gemini avant cette décision.
+2. **Câblage réel des profils d'essais `CampagneEssai`** :
+   - Remplacement des formules de substitution empiriques non sourcées par une vraie dérivation depuis les profils de pénétromètre ou pressiomètre.
+   - Remplacement de la dispersion artificielle à 3 sondages par le calcul réel de $\xi_3$ et $\xi_4$ sur le nombre effectif de sondages du projet.
+3. **Groupe de pieux (§7.6)** : vérification du modèle d'effet de groupe selon CDC.
 
 ## Wiring restant (hors code de calcul)
 

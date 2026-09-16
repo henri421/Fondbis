@@ -41,6 +41,7 @@ export interface ResultatRadierRessortsIteratifs {
     nbIterations: number;
     ecartFinalRelatif: number;
     historique: IterationHistorique[];
+    avertissements: string[];
   };
   champs: {
     noeuds: Array<{
@@ -117,6 +118,7 @@ export function calculerRadierSurRessortsIteratifs(
   let dernierResultatPlaque: ResultatPlaqueSurRessorts | null = null;
   let tassementsPrec: number[] = new Array(nTotal).fill(0);
   const historique: IterationHistorique[] = [];
+  const avertissements: string[] = [];
   let converge = false;
   let ecartFinal = 1.0;
 
@@ -124,6 +126,11 @@ export function calculerRadierSurRessortsIteratifs(
     // 1. Résolution de la plaque sur le champ de raideurs ks
     const resPlaque = resoudrePlaque2DSurRessorts(optionsPlaque, qNodal, ksVecteur);
     dernierResultatPlaque = resPlaque;
+
+    if (!resPlaque.convergé) {
+      const msg = `Itération ${it} : le solveur de plaque interne n'a pas convergé. ${resPlaque.avertissements?.join(' ') ?? ''}`.trim();
+      avertissements.push(msg);
+    }
 
     // 2. Calcul des tassements par colonne de sol sous chaque nœud
     const tassementsNouveaux: number[] = [];
@@ -134,6 +141,15 @@ export function calculerRadierSurRessortsIteratifs(
       let s_noeud = 0;
       let sigma_v0 = 10; // contrainte géostatique moyenne sous radier
 
+      // Atténuation spatiale sous semelle/radier rectangulaire (effet de cuvette Boussinesq)
+      const i_nd = i % (nx + 1);
+      const j_nd = Math.floor(i / (nx + 1));
+      const x_nd = i_nd * (longueurL / nx);
+      const y_nd = j_nd * (largeurB / ny);
+      const xi = Math.abs(x_nd - longueurL / 2) / (longueurL / 2);
+      const eta = Math.abs(y_nd - largeurB / 2) / (largeurB / 2);
+      const facteurForme = (1 - 0.25 * xi * xi) * (1 - 0.25 * eta * eta);
+
       for (const couche of couches) {
         const H = Math.min(couche.epaisseur, 2 * largeurB);
         const Cc = couche.deformation?.Cc?.v ?? 0.1;
@@ -141,8 +157,8 @@ export function calculerRadierSurRessortsIteratifs(
         const e0 = couche.deformation?.e0?.v ?? 0.7;
         const sigP = couche.deformation?.sigmaPrecons?.v ?? 100;
 
-        // Atténuation de Boussinesq simplifiée en profondeur
-        const deltaSig = p * 0.75;
+        // Atténuation de Boussinesq combinée profondeur et position spatiale
+        const deltaSig = p * 0.75 * facteurForme;
         if (deltaSig > 0.1) {
           if (sigma_v0 + deltaSig <= sigP) {
             s_noeud += (Cs / (1 + e0)) * H * Math.log10((sigma_v0 + deltaSig) / sigma_v0);
@@ -200,6 +216,12 @@ export function calculerRadierSurRessortsIteratifs(
     tassementsPrec = tassementsNouveaux;
   }
 
+  if (!converge) {
+    avertissements.push(
+      `La boucle sol-structure n'a pas atteint le critère de convergence de ${(tol * 100).toFixed(1)}% en ${maxIter} itérations (écart final = ${(ecartFinal * 100).toFixed(2)}%).`
+    );
+  }
+
   const resFinale = dernierResultatPlaque!;
   const tassements_mm = resFinale.deplacements_w.map((w) => Number((w * 1000).toFixed(2)));
   const sMax_mm = Math.max(...tassements_mm);
@@ -251,10 +273,11 @@ export function calculerRadierSurRessortsIteratifs(
       ksFinalMoyen: Number((ksVecteur.reduce((a, b) => a + b, 0) / ksVecteur.length).toFixed(0)),
     },
     convergence: {
-      convergé: converge,
+      convergé: converge && (dernierResultatPlaque?.convergé ?? false),
       nbIterations: historique.length,
       ecartFinalRelatif: Number((ecartFinal * 100).toFixed(2)),
       historique,
+      avertissements,
     },
     champs: {
       noeuds: noeudsDetailles,

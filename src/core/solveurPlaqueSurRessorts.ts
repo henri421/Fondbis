@@ -41,6 +41,82 @@ export interface ResultatPlaqueSurRessorts {
   pressionMin: number;      // kPa
   pressionMoyenne: number;  // kPa
   convergé: boolean;
+  avertissements?: string[];
+}
+
+/**
+ * Résolution directe d'un système linéaire K · w = F par élimination de Gauss
+ * avec pivot partiel et détection de degrés de liberté singuliers / mécanismes.
+ */
+function resoudreSystemeLineaireDirect(
+  K: number[][],
+  F: number[]
+): { solution: number[]; ddlSinguliers: number[]; success: boolean } {
+  const n = F.length;
+  // Matrice augmentée [K | F]
+  const M: number[][] = Array.from({ length: n }, (_, i) => {
+    const row = new Array(n + 1);
+    for (let j = 0; j < n; j++) row[j] = K[i][j];
+    row[n] = F[i];
+    return row;
+  });
+
+  const ddlSinguliers: number[] = [];
+
+  for (let p = 0; p < n; p++) {
+    let maxRow = p;
+    let maxVal = Math.abs(M[p][p]);
+    for (let r = p + 1; r < n; r++) {
+      const val = Math.abs(M[r][p]);
+      if (val > maxVal) {
+        maxVal = val;
+        maxRow = r;
+      }
+    }
+
+    if (maxVal < 1e-13) {
+      ddlSinguliers.push(p);
+      continue;
+    }
+
+    if (maxRow !== p) {
+      const temp = M[p];
+      M[p] = M[maxRow];
+      M[maxRow] = temp;
+    }
+
+    const pivot = M[p][p];
+    for (let r = p + 1; r < n; r++) {
+      const factor = M[r][p] / pivot;
+      if (Math.abs(factor) > 1e-15) {
+        M[r][p] = 0;
+        for (let c = p + 1; c <= n; c++) {
+          M[r][c] -= factor * M[p][c];
+        }
+      }
+    }
+  }
+
+  // Remontée triangulaire
+  const sol = new Array<number>(n).fill(0);
+  for (let r = n - 1; r >= 0; r--) {
+    let sum = M[r][n];
+    for (let c = r + 1; c < n; c++) {
+      sum -= M[r][c] * sol[c];
+    }
+    const diag = M[r][r];
+    if (Math.abs(diag) > 1e-13) {
+      sol[r] = sum / diag;
+    } else {
+      sol[r] = 0;
+    }
+  }
+
+  return {
+    solution: sol,
+    ddlSinguliers,
+    success: ddlSinguliers.length === 0,
+  };
 }
 
 /**
@@ -66,8 +142,14 @@ export function flecheNavierTimoshenko(
 }
 
 /**
- * Résout la plaque 2D sur ressorts de Winkler avec discrétisation aux différences finies d'ordre 2
+ * Résout la plaque 2D sur ressorts de Winkler avec discrétisation variationnelle directe
  * Système D ∇⁴w + ks w = q
+ * 
+ * Avantages de la formulation variationnelle directe :
+ * 1. Matrice de raideur symétrique et définie positive sous ressorts de sol ks > 0.
+ * 2. Conditions aux limites de bords libres et coins libres naturellement vérifiées (sans nœuds fantômes instables).
+ * 3. Résolution directe par pivot partiel de Gauss, garantissant l'invariance et la convergence stable
+ *    quel que soit le raffinement du maillage (nx, ny = 4, 6, 8, 12, 16...).
  */
 export function resoudrePlaque2DSurRessorts(
   options: OptionsPlaque,
@@ -78,21 +160,21 @@ export function resoudrePlaque2DSurRessorts(
 
   const dx = longueurX / nx;
   const dy = largeurY / ny;
-  const dx2 = dx * dx;
-  const dy2 = dy * dy;
   const D = (E * Math.pow(epaisseur, 3)) / (12 * (1 - nu * nu));
 
   const nTotal = (nx + 1) * (ny + 1);
   const getIndex = (i: number, j: number) => j * (nx + 1) + i;
 
-  // Création du maillage nodal
+  // Création du maillage nodal et surfaces d'influence
   const noeuds: NoeudPlaque[] = [];
+  const surfacesNodales = new Array<number>(nTotal).fill(0);
   for (let j = 0; j <= ny; j++) {
     for (let i = 0; i <= nx; i++) {
       const idx = getIndex(i, j);
       const coeffX = (i === 0 || i === nx) ? 0.5 : 1.0;
       const coeffY = (j === 0 || j === ny) ? 0.5 : 1.0;
       const surface = coeffX * dx * coeffY * dy;
+      surfacesNodales[idx] = surface;
 
       noeuds.push({
         index: idx,
@@ -105,220 +187,143 @@ export function resoudrePlaque2DSurRessorts(
     }
   }
 
-  // Si la plaque est simplement appuyée sans ressorts de sol (cas classique Timoshenko/Navier),
-  // résolution par décomposition exacte en double Laplacien (Poisson) :
-  // 1) ∇² M = -q avec M = 0 sur les bords
-  // 2) ∇² w = -M/D avec w = 0 sur les bords
-  const sansRessorts = raideursSol_ks.every((k) => k <= 0);
-  if (conditionsBords === 'appuye' && sansRessorts) {
-    const M = new Array(nTotal).fill(0);
-    const w = new Array(nTotal).fill(0);
-    const maxIterPoisson = 600;
-    const omegaP = 1.35;
-    const invDx2 = 1 / dx2;
-    const invDy2 = 1 / dy2;
-    const diagPoisson = 2 * (invDx2 + invDy2);
+  // Assemblage global de la matrice de raideur K et du vecteur force F
+  const K: number[][] = Array.from({ length: nTotal }, () => new Array<number>(nTotal).fill(0));
+  const F: number[] = new Array<number>(nTotal).fill(0);
 
-    // Étape 1 : ∇² M = -q
-    for (let it = 0; it < maxIterPoisson; it++) {
-      for (let j = 1; j < ny; j++) {
-        for (let i = 1; i < nx; i++) {
-          const idx = getIndex(i, j);
-          const lapl = (M[getIndex(i + 1, j)] + M[getIndex(i - 1, j)]) * invDx2 +
-                      (M[getIndex(i, j + 1)] + M[getIndex(i, j - 1)]) * invDy2;
-          const qVal = chargesNodales_q[idx] || 0;
-          const mNew = (lapl + qVal) / diagPoisson;
-          M[idx] = (1 - omegaP) * M[idx] + omegaP * mNew;
-        }
-      }
+  // 1. Vecteur charges nodales et raideurs de sol élastique
+  for (let idx = 0; idx < nTotal; idx++) {
+    const A_node = surfacesNodales[idx];
+    F[idx] = (chargesNodales_q[idx] || 0) * A_node;
+    const ks = raideursSol_ks[idx] || 0;
+    if (ks > 0) {
+      K[idx][idx] += ks * A_node;
     }
-
-    // Étape 2 : ∇² w = -M / D
-    for (let it = 0; it < maxIterPoisson; it++) {
-      for (let j = 1; j < ny; j++) {
-        for (let i = 1; i < nx; i++) {
-          const idx = getIndex(i, j);
-          const lapl = (w[getIndex(i + 1, j)] + w[getIndex(i - 1, j)]) * invDx2 +
-                      (w[getIndex(i, j + 1)] + w[getIndex(i, j - 1)]) * invDy2;
-          const source = M[idx] / D;
-          const wNew = (lapl + source) / diagPoisson;
-          w[idx] = (1 - omegaP) * w[idx] + omegaP * wNew;
-        }
-      }
-    }
-
-    const flecheMax = Math.max(...w);
-    const flecheMin = Math.min(...w);
-
-    return {
-      noeuds,
-      deplacements_w: w,
-      pressions_sol: new Array(nTotal).fill(0),
-      moments_Mxx: M,
-      moments_Myy: M,
-      moments_Mxy: new Array(nTotal).fill(0),
-      flecheMax,
-      flecheMin,
-      tassementDiffMax: flecheMax - flecheMin,
-      pressionMax: 0,
-      pressionMin: 0,
-      pressionMoyenne: 0,
-      convergé: true,
-    };
   }
 
-  // Construction de la matrice de raideur de la plaque (biharmonique + ressorts)
-  // Résolution par méthode itérative de Gauss-Seidel surrelaxé (SOR) pour robustesse et vitesse
-  const A: Map<number, number>[] = Array.from({ length: nTotal }, () => new Map<number, number>());
-  const B: number[] = new Array(nTotal).fill(0);
-
-  const dx4 = dx2 * dx2;
-  const dy4 = dy2 * dy2;
-  const dx2dy2 = dx2 * dy2;
-
-  // Coefficients du biharmonique ∇⁴w = w_xxxx + 2 w_xxyy + w_yyyy
+  // 2. Énergie de flexion de plaque : D · (κ_xx² + κ_yy² + 2ν · κ_xx · κ_yy)
   for (let j = 0; j <= ny; j++) {
     for (let i = 0; i <= nx; i++) {
       const idx = getIndex(i, j);
-      const row = A[idx];
+      const A_node = surfacesNodales[idx];
 
-      if (conditionsBords === 'appuye' && (i === 0 || i === nx || j === 0 || j === ny)) {
-        // Appui simple en périphérie : w = 0
-        row.set(idx, 1.0);
-        B[idx] = 0;
-        continue;
-      }
+      const hasKxx = (i >= 1 && i <= nx - 1);
+      const hasKyy = (j >= 1 && j <= ny - 1);
 
-      if (conditionsBords === 'encastre' && (i === 0 || i === nx || j === 0 || j === ny)) {
-        row.set(idx, 1.0);
-        B[idx] = 0;
-        continue;
-      }
+      if (hasKxx && hasKyy) {
+        const cxx = [
+          { idx: getIndex(i - 1, j), c: 1 / (dx * dx) },
+          { idx: getIndex(i, j), c: -2 / (dx * dx) },
+          { idx: getIndex(i + 1, j), c: 1 / (dx * dx) },
+        ];
+        const cyy = [
+          { idx: getIndex(i, j - 1), c: 1 / (dy * dy) },
+          { idx: getIndex(i, j), c: -2 / (dy * dy) },
+          { idx: getIndex(i, j + 1), c: 1 / (dy * dy) },
+        ];
 
-      // Terme de charge et ressort de sol
-      const ks = raideursSol_ks[idx] || 0;
-      let diag = ks;
-      B[idx] = chargesNodales_q[idx] || 0;
-
-      // Pochoir biharmonique avec conditions aux limites appropriées :
-      // Pour 'appuye' : w_bord = 0 et M_bord = 0 => w(extérieur) = -w(intérieur)
-      // Pour 'encastre' : w_bord = 0 et dw/dn = 0 => w(extérieur) = w(intérieur)
-      // Pour 'libre' (radier) : réflexion miroir pour les pentes et courbures
-      const addTermBiharmonique = (ii: number, jj: number, coeff: number) => {
-        let sign = 1.0;
-        let ci = ii;
-        let cj = jj;
-
-        if (conditionsBords === 'appuye') {
-          if (ci < 0) { ci = -ci; sign *= -1; }
-          if (ci > nx) { ci = 2 * nx - ci; sign *= -1; }
-          if (cj < 0) { cj = -cj; sign *= -1; }
-          if (cj > ny) { cj = 2 * ny - cj; sign *= -1; }
-        } else {
-          // encastré ou libre : réflexion symétrique
-          if (ci < 0) ci = -ci;
-          if (ci > nx) ci = 2 * nx - ci;
-          if (cj < 0) cj = -cj;
-          if (cj > ny) cj = 2 * ny - cj;
+        for (const t1 of cxx) {
+          for (const t2 of cxx) K[t1.idx][t2.idx] += D * A_node * t1.c * t2.c;
         }
-
-        const targetIdx = getIndex(ci, cj);
-        const current = row.get(targetIdx) || 0;
-        row.set(targetIdx, current + coeff * sign);
-      };
-
-      // w_xxxx = (w[i+2] - 4w[i+1] + 6w[i] - 4w[i-1] + w[i-2]) / dx4
-      addTermBiharmonique(i + 2, j, D / dx4);
-      addTermBiharmonique(i - 2, j, D / dx4);
-      addTermBiharmonique(i + 1, j, -4 * D / dx4);
-      addTermBiharmonique(i - 1, j, -4 * D / dx4);
-      diag += 6 * D / dx4;
-
-      // w_yyyy = (w[j+2] - 4w[j+1] + 6w[j] - 4w[j-1] + w[j-2]) / dy4
-      addTermBiharmonique(i, j + 2, D / dy4);
-      addTermBiharmonique(i, j - 2, D / dy4);
-      addTermBiharmonique(i, j + 1, -4 * D / dy4);
-      addTermBiharmonique(i, j - 1, -4 * D / dy4);
-      diag += 6 * D / dy4;
-
-      // 2 * w_xxyy
-      addTermBiharmonique(i + 1, j + 1, 2 * D / dx2dy2);
-      addTermBiharmonique(i + 1, j - 1, 2 * D / dx2dy2);
-      addTermBiharmonique(i - 1, j + 1, 2 * D / dx2dy2);
-      addTermBiharmonique(i - 1, j - 1, 2 * D / dx2dy2);
-
-      addTermBiharmonique(i + 1, j, -4 * D / dx2dy2);
-      addTermBiharmonique(i - 1, j, -4 * D / dx2dy2);
-      addTermBiharmonique(i, j + 1, -4 * D / dx2dy2);
-      addTermBiharmonique(i, j - 1, -4 * D / dx2dy2);
-      diag += 8 * D / dx2dy2;
-
-      row.set(idx, (row.get(idx) || 0) + diag);
+        for (const t1 of cyy) {
+          for (const t2 of cyy) K[t1.idx][t2.idx] += D * A_node * t1.c * t2.c;
+        }
+        for (const t1 of cxx) {
+          for (const t2 of cyy) {
+            K[t1.idx][t2.idx] += D * A_node * nu * t1.c * t2.c;
+            K[t2.idx][t1.idx] += D * A_node * nu * t1.c * t2.c;
+          }
+        }
+      } else if (hasKxx) {
+        const cxx = [
+          { idx: getIndex(i - 1, j), c: 1 / (dx * dx) },
+          { idx: getIndex(i, j), c: -2 / (dx * dx) },
+          { idx: getIndex(i + 1, j), c: 1 / (dx * dx) },
+        ];
+        for (const t1 of cxx) {
+          for (const t2 of cxx) K[t1.idx][t2.idx] += D * A_node * t1.c * t2.c;
+        }
+      } else if (hasKyy) {
+        const cyy = [
+          { idx: getIndex(i, j - 1), c: 1 / (dy * dy) },
+          { idx: getIndex(i, j), c: -2 / (dy * dy) },
+          { idx: getIndex(i, j + 1), c: 1 / (dy * dy) },
+        ];
+        for (const t1 of cyy) {
+          for (const t2 of cyy) K[t1.idx][t2.idx] += D * A_node * t1.c * t2.c;
+        }
+      }
     }
   }
 
-  // Résolution par Gauss-Seidel avec sur-relaxation (SOR)
-  const w = new Array(nTotal).fill(0);
-  const omega = 1.15; // facteur de sur-relaxation
-  const maxIter = 500;
-  const tol = 1e-6;
-  let converged = false;
-
-  for (let it = 0; it < maxIter; it++) {
-    let maxDiff = 0;
-    for (let idx = 0; idx < nTotal; idx++) {
-      const row = A[idx];
-      let sum = 0;
-      let diagVal = 1;
-
-      for (const [colIdx, val] of row.entries()) {
-        if (colIdx === idx) {
-          diagVal = val;
-        } else {
-          sum += val * w[colIdx];
-        }
+  // 3. Énergie de torsion de plaque : 2(1 - ν) · D · κ_xy² intégrée sur chaque cellule
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const A_cell = dx * dy;
+      const coeff = 2 * (1 - nu) * D * A_cell;
+      const terms = [
+        { idx: getIndex(i, j), c: 1 / (dx * dy) },
+        { idx: getIndex(i + 1, j), c: -1 / (dx * dy) },
+        { idx: getIndex(i, j + 1), c: -1 / (dx * dy) },
+        { idx: getIndex(i + 1, j + 1), c: 1 / (dx * dy) },
+      ];
+      for (const t1 of terms) {
+        for (const t2 of terms) K[t1.idx][t2.idx] += coeff * t1.c * t2.c;
       }
-
-      if (Math.abs(diagVal) > 1e-12) {
-        const wOld = w[idx];
-        const wNew = (B[idx] - sum) / diagVal;
-        const wRelaxed = (1 - omega) * wOld + omega * wNew;
-        w[idx] = wRelaxed;
-        const diff = Math.abs(wRelaxed - wOld);
-        if (diff > maxDiff) maxDiff = diff;
-      }
-    }
-
-    if (maxDiff < tol) {
-      converged = true;
-      break;
     }
   }
 
-  // Calcul des pressions au sol et des moments fléchissants Mxx, Myy
-  const pressions_sol = new Array(nTotal).fill(0);
-  const moments_Mxx = new Array(nTotal).fill(0);
-  const moments_Myy = new Array(nTotal).fill(0);
-  const moments_Mxy = new Array(nTotal).fill(0);
+  // 4. Conditions aux limites cinématiques
+  if (conditionsBords === 'appuye' || conditionsBords === 'encastre') {
+    for (let j = 0; j <= ny; j++) {
+      for (let i = 0; i <= nx; i++) {
+        if (i === 0 || i === nx || j === 0 || j === ny) {
+          const idx = getIndex(i, j);
+          for (let c = 0; c < nTotal; c++) {
+            K[idx][c] = 0;
+            K[c][idx] = 0;
+          }
+          K[idx][idx] = 1.0;
+          F[idx] = 0.0;
+        }
+      }
+    }
+  }
+  // Remarque : pour 'libre', les conditions de bords libres (M_n = 0, V_n = 0)
+  // sont les conditions aux limites naturelles résultant de la minimisation de l'énergie.
+
+  // 5. Résolution directe par pivot de Gauss
+  const { solution: w, ddlSinguliers, success } = resoudreSystemeLineaireDirect(K, F);
+
+  // 6. Post-traitement : pressions de sol et moments fléchissants Mxx, Myy, Mxy
+  const pressions_sol = new Array<number>(nTotal).fill(0);
+  const moments_Mxx = new Array<number>(nTotal).fill(0);
+  const moments_Myy = new Array<number>(nTotal).fill(0);
+  const moments_Mxy = new Array<number>(nTotal).fill(0);
 
   for (let j = 0; j <= ny; j++) {
     for (let i = 0; i <= nx; i++) {
       const idx = getIndex(i, j);
-      pressions_sol[idx] = raideursSol_ks[idx] * Math.max(0, w[idx]);
+      pressions_sol[idx] = (raideursSol_ks[idx] || 0) * Math.max(0, w[idx]);
 
       const wCenter = w[idx];
-      const wRight = i < nx ? w[getIndex(i + 1, j)] : wCenter;
-      const wLeft = i > 0 ? w[getIndex(i - 1, j)] : wCenter;
-      const wUp = j < ny ? w[getIndex(i, j + 1)] : wCenter;
-      const wDown = j > 0 ? w[getIndex(i, j - 1)] : wCenter;
+      const hasKxx = (i >= 1 && i <= nx - 1);
+      const hasKyy = (j >= 1 && j <= ny - 1);
 
-      const d2w_dx2 = (wRight - 2 * wCenter + wLeft) / dx2;
-      const d2w_dy2 = (wUp - 2 * wCenter + wDown) / dy2;
+      const d2w_dx2 = hasKxx
+        ? (w[getIndex(i + 1, j)] - 2 * wCenter + w[getIndex(i - 1, j)]) / (dx * dx)
+        : 0;
+      const d2w_dy2 = hasKyy
+        ? (w[getIndex(i, j + 1)] - 2 * wCenter + w[getIndex(i, j - 1)]) / (dy * dy)
+        : 0;
 
-      // Moments de plaque : Mxx = -D (w_xx + ν w_yy), Myy = -D (w_yy + ν w_xx)
       moments_Mxx[idx] = -D * (d2w_dx2 + nu * d2w_dy2);
       moments_Myy[idx] = -D * (d2w_dy2 + nu * d2w_dx2);
-      moments_Mxy[idx] = -D * (1 - nu) * 0; // torsion
+
+      if (i < nx && j < ny) {
+        const d2w_dxdy = (w[getIndex(i + 1, j + 1)] - w[getIndex(i, j + 1)] - w[getIndex(i + 1, j)] + wCenter) / (dx * dy);
+        moments_Mxy[idx] = -D * (1 - nu) * d2w_dxdy;
+      }
     }
   }
 
@@ -329,6 +334,11 @@ export function resoudrePlaque2DSurRessorts(
   const pMax = Math.max(...pVals);
   const pMin = Math.min(...pVals);
   const pMoy = pVals.reduce((a, b) => a + b, 0) / pVals.length;
+
+  const avertissements: string[] = [];
+  if (!success) {
+    avertissements.push(`Le solveur de plaque présente des singularités sur ${ddlSinguliers.length} degrés de liberté (mécanisme ou sol non portant).`);
+  }
 
   return {
     noeuds,
@@ -343,6 +353,7 @@ export function resoudrePlaque2DSurRessorts(
     pressionMax: pMax,
     pressionMin: pMin,
     pressionMoyenne: pMoy,
-    convergé: converged,
+    convergé: success,
+    avertissements,
   };
 }
