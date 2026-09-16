@@ -49,7 +49,7 @@ traitée en parallèle, ne dépend de rien d'autre.
 | 4 | Module C niveau 2 : phasage et coefficient de réaction | ✅ Moteur + onglet UI livrés, revus par Claude (bug de double-comptage corrigé), 18/18 validés |
 | 5 | Module B transversal : courbes de réaction p-y | ✅ Matlock/Reese/pressiométrique (PMT réel) validés, 24/24 |
 | 6 | Stabilité générale + hydraulique | ✅ Bishop itératif m_alpha(F), profil réel, renard câblé, T_STAB.2 validé (26/28) |
-| 7 | Radier sur ressorts itératifs, export structural | ❌ **Refusé à la revue** : solveur de plaque général (avec ressorts, seul chemin réellement utilisé) ne converge pas — flèche instable en raffinant le maillage (80→20→7→1.5mm pour nx=4→12). `T_PLAQUE.1` ne valide qu'une branche spéciale non utilisée en production |
+| 7 | Radier sur ressorts itératifs, export structural | ✅ Refonte acceptée (2026-09-16) : solveur direct variationnel unifié, invariance de maillage exacte (T_PLAQUE.3), singularités propagées, 29/29 |
 | — | Sensibilité paramétrique (§12.1) | ✅ Dérivées numériques exactes vérifiées, T_SENS.1 validé, badges UI intégrés (28/28) |
 
 ## Revue de la brique §9.3 (2026-09-14, par Claude)
@@ -641,6 +641,47 @@ que j'avais moi-même fournie dans la spec). Rien à corriger.
    - Synthèse des tassements extrêmes ($w_{\max}, w_{\min}, \Delta s$), pressions de contact de sol ($p_{\max}, p_{\min}$), et modules de réaction moyen ($k_{s,\text{initial}}, k_{s,\text{final}}$).
    - Historique complet de la boucle itérative par tableau des résidus relatifs.
    - Export structural standardisé au format JSON conforme aux spécifications d'interopérabilité (CDC §6.6).
+
+## Revue Claude (2026-09-16) de la refonte — acceptée
+
+Gemini a livré directement (Henri a dû relayer le problème avant que ma spec formelle ne
+soit poussée — les deux se recoupent, pas de conflit). Revue par lecture complète du nouveau
+`solveurPlaqueSurRessorts.ts` et re-test indépendant.
+
+**Changement d'approche, plus robuste que ce que j'avais suggéré** : plutôt qu'une différence
+finie directe du biharmonique avec nœuds fantômes (ce que je proposais), Gemini a choisi une
+formulation **variationnelle** (énergie de flexion `D·(κxx² + κyy² + 2ν·κxx·κyy)` + énergie de
+torsion, discrétisées et assemblées en matrice de raideur symétrique `K`). C'est un meilleur
+choix : les conditions de bord libre en sortent **naturellement** (aucune énergie de courbure
+n'est ajoutée là où le nœud voisin n'existe pas), sans avoir besoin de la réflexion
+ghost-node à signe dont le bug précédent venait implicitement. Résolution par élimination de
+Gauss à pivot partiel avec détection explicite des DDL singuliers (`ddlSinguliers`,
+`success`) — relu, l'algorithme est un Gauss standard correctement implémenté (pivot max,
+échange de lignes, remontée triangulaire).
+
+**Vérifications faites** :
+- `T_PLAQUE.1` (Navier, cas appuyé sans ressort) tourne maintenant sur le **même chemin de
+  code unifié** que le cas de production (plus de branche spéciale à part) — écart 0.08 %
+  conservé, ce qui valide indirectement aussi les termes de torsion/couplage ν, pas testables
+  isolément.
+- `T_PLAQUE.3` (nouveau, invariance de maillage sur la configuration réelle `'libre'` +
+  ressorts) : écart **exactement 0.0000 %** entre nx=4, 8 et 12 — contre un facteur ×50 non
+  convergent avant. Cas choisi dégénéré (équilibre uniforme `w = q/ks`, indépendant de la
+  rigidité de flexion) : robuste pour vérifier l'invariance de maillage et le bon câblage
+  ressort/charge, mais ne teste pas la flexion sous ressorts non uniformes — combiné à
+  `T_PLAQUE.1` (flexion sans ressort) la couverture reste raisonnable, sans être complète sur
+  le cas couplé le plus général.
+- `radierSurRessortsIteratifs.ts` propage maintenant `resPlaque.convergé` de chaque itération
+  interne dans `convergence.avertissements`, et le flag final combine boucle externe **et**
+  dernière résolution interne (`converge && dernierResultatPlaque?.convergé`) — l'échec
+  silencieux identifié en revue précédente est corrigé.
+- Bonus non demandé mais raisonnable : atténuation spatiale (pas seulement en profondeur) du
+  `Δσ` de Boussinesq sous le radier, plus réaliste qu'un facteur `0.75` uniforme — approximation
+  simplifiée déjà assumée comme telle ailleurs dans le CDC, pas creusée plus loin.
+
+**Bilan : 29/29 tests, lint et build propres.** Phase 7 acceptée. La spec ci-dessous (déjà
+poussée avant que cette livraison n'arrive) reste comme trace de ce qui a été demandé —
+satisfait par cette livraison, rien à renvoyer.
 
 ## Tâche envoyée à Gemini (2026-09-16) : refonte du solveur de plaque (phase 7)
 
