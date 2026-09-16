@@ -665,19 +665,63 @@ qu'au moins l'échec cesse d'être silencieux même avant la refonte numérique)
 `resPlaque.convergé` de chaque itération interne dans `convergence.avertissements` du
 résultat retourné par `calculerRadierSurRessortsIteratifs`.
 
+## Tâche envoyée à Gemini (2026-09-16) : refonte du solveur de plaque (phase 7)
+
+**Contexte (voir revue Claude ci-dessus pour le détail).** `resoudrePlaque2DSurRessorts`
+a deux chemins de code : un cas spécial (`'appuye'` + aucun ressort, résolu par deux Poisson
+successifs) et un cas général (tout le reste, dont `'libre'` + ressorts — **le seul
+réellement utilisé par `radierSurRessortsIteratifs.ts`**), résolu par Gauss-Seidel
+sur-relaxé (SOR, 500 itérations, ω=1.15). Le cas général ne converge jamais en production :
+vérifié en faisant varier le maillage (nx=ny=4, 6, 8, 12) sur un radier 6×6m/ks=500 kN/m³/
+`'libre'`, la flèche max retournée passe de 80.2mm à 20.4, 7.1 puis 1.5mm au lieu de se
+stabiliser — ce n'est pas une solution convergée, c'est un instantané d'un calcul encore en
+mouvement. Le seul test existant (`T_PLAQUE.1`) valide l'AUTRE branche (spéciale, jamais
+utilisée en production), et rien ne vérifie ni ne propage la convergence du solveur interne
+dans la boucle extérieure de `radierSurRessortsIteratifs`.
+
+**Exigence critique** : ne pas se contenter de retoucher `ω`/le nombre d'itérations du SOR.
+Gauss-Seidel/SOR est structurellement mal adapté à un opérateur biharmonique (conditionnement
+qui se dégrade en O(h⁻⁴) quand le maillage se raffine) — c'est la cause de fond, pas un
+simple manque d'itérations.
+
+1. **Remplacer le solveur par une résolution directe**, cohérente avec l'approche déjà
+   retenue pour la poutre (`solveurPoutreRessorts.ts`, « factorisation directe » d'après le
+   CDC §9.3). La matrice creuse est déjà assemblée par nœud (`A: Map<number, number>[]`,
+   `B: number[]`) — remplacer uniquement l'étape de résolution : élimination de Gauss avec
+   pivot partiel sur la matrice dense reconstruite depuis `A`/`B` est suffisant et le plus
+   sûr à vérifier (pas besoin d'une solution bande optimisée pour l'instant ; les tailles de
+   grille visées, quelques centaines de nœuds, restent largement gérables en dense d'après
+   les tolérances de performance du CDC §3.3). Ne pas introduire de méthode itérative
+   alternative (gradient conjugué, multigrille) sans en discuter avant — plus de risque
+   d'introduire un nouveau bug de convergence du même genre.
+2. **Simplifier à un seul chemin de code.** Supprimer le cas spécial « deux Poisson
+   successifs » pour `'appuye'` sans ressort — avec une résolution directe, ce n'est plus
+   nécessaire, et un seul chemin de code élimine le risque qu'un test valide une branche
+   différente de celle utilisée en production (exactement ce qui s'est produit ici).
+   `T_PLAQUE.1` doit continuer à passer sur ce chemin unique.
+3. **Nouveau test de convergence par raffinement de maillage**, sur la configuration
+   réellement utilisée (`'libre'` + ressorts de sol, comme dans `radierSurRessortsIteratifs`) :
+   résoudre la même plaque avec deux résolutions de maillage différentes (ex. nx=ny=8 puis
+   nx=ny=16) et vérifier que la flèche max obtenue diverge de moins de ~5 % entre les deux —
+   c'est le test qui aurait dû exister et qui aurait attrapé ce bug. Sans lui, aucun garde-fou
+   ne protège contre une régression future de ce type.
+4. **Robustesse, pas de résultat faux-silencieux (CDC §10)** : avec une résolution directe,
+   remplacer la notion de « convergé après N itérations » par une détection de singularité
+   (pivot quasi nul pendant l'élimination, sur le modèle de ce que fait déjà
+   `solveurPoutreRessorts.ts` pour la poutre) — mécanisme réel (radier insuffisamment
+   supporté) plutôt qu'un flag de convergence qui n'a plus de sens avec un solveur direct.
+5. **`radierSurRessortsIteratifs.ts`** : sa propre boucle extérieure (mise à jour de `ks`)
+   reste inchangée dans son principe — juste s'assurer qu'elle propage un éventuel
+   avertissement de singularité remonté par le solveur de plaque, au lieu de l'ignorer comme
+   c'était le cas pour l'ancien flag `convergé`.
+6. **Ne pas toucher** aux parties A (sensibilité) et B (stabilité/hydraulique) de la
+   précédente livraison — déjà revues et acceptées, aucune régression attendue ni tolérée.
+
 ## Prochaines étapes (selon plan)
 
-1. **Solveur de plaque général (phase 7)** — ne converge pas en production (voir revue
-   ci-dessus). Reprendre `resoudrePlaque2DSurRessorts` pour le cas avec ressorts de sol :
-   remplacer le Gauss-Seidel/SOR par une résolution directe (cohérent avec
-   `solveurPoutreRessorts.ts`) ou une méthode itérative robuste pour opérateur biharmonique
-   (gradient conjugué préconditionné, multigrille) ; ajouter un test indépendant qui exerce
-   la branche `'libre'` + ressorts réellement utilisée (pas seulement `'appuye'` sans
-   ressort) ; propager `convergé` de chaque résolution interne dans les avertissements du
-   résultat itératif, pour qu'un futur échec reste visible même après correction.
-2. **Dérivation CPT pour la capacité axiale des pieux** — en attente du choix de méthode par
+1. **Dérivation CPT pour la capacité axiale des pieux** — en attente du choix de méthode par
    Henri (voir « Constat d'audit » plus haut). Ne pas envoyer à Gemini avant cette décision.
-3. **Groupe de pieux (§7.6)**, si un point restait ouvert après la revue ci-dessus — a priori
+2. **Groupe de pieux (§7.6)**, si un point restait ouvert après la revue ci-dessus — a priori
    clos.
 
 ## Wiring restant (hors code de calcul)
