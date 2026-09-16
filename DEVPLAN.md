@@ -49,7 +49,7 @@ traitée en parallèle, ne dépend de rien d'autre.
 | 4 | Module C niveau 2 : phasage et coefficient de réaction | ✅ Moteur + onglet UI livrés, revus par Claude (bug de double-comptage corrigé), 18/18 validés |
 | 5 | Module B transversal : courbes de réaction p-y | ✅ Matlock/Reese/pressiométrique (PMT réel) validés, 24/24 |
 | 6 | Stabilité générale + hydraulique | ✅ Bishop itératif m_alpha(F), profil réel, renard câblé, T_STAB.2 validé (26/28) |
-| 7 | Radier sur ressorts itératifs, export structural | ✅ Solveur plaque 2D (Timoshenko T_PLAQUE.1), boucle CDC §6.6 (T_PLAQUE.2) validés |
+| 7 | Radier sur ressorts itératifs, export structural | ❌ **Refusé à la revue** : solveur de plaque général (avec ressorts, seul chemin réellement utilisé) ne converge pas — flèche instable en raffinant le maillage (80→20→7→1.5mm pour nx=4→12). `T_PLAQUE.1` ne valide qu'une branche spéciale non utilisée en production |
 | — | Sensibilité paramétrique (§12.1) | ✅ Dérivées numériques exactes vérifiées, T_SENS.1 validé, badges UI intégrés (28/28) |
 
 ## Revue de la brique §9.3 (2026-09-14, par Claude)
@@ -590,6 +590,95 @@ Studio, 6ᵉ occurrence).
 - **28 / 28 tests d'acceptation validés (100%)** via `npm run test:acceptance`.
 - **TypeScript strict** : `npm run lint` sans aucune erreur.
 - **Compilation de production** : `npm run build` réussie.
+
+## Revue Claude (2026-09-16) des trois parties — A et B acceptées, C refusée en l'état
+
+Revue faite séparément comme prévu (voir consigne dans la tâche combinée plus haut). Lecture
+de code complète pour les trois parties, plus vérification indépendante de chaque test
+analytique cité (pas seulement ré-exécution de la suite).
+
+### A. Sensibilité paramétrique — ✅ acceptée
+
+`dNq/dφ` et `dNγ/dφ` re-dérivées à la main par différentiation logarithmique de
+`Nq = e^(π·tanφ)·tan²(π/4+φ/2)` (utilise l'identité classique
+`d/dφ[ln tan(π/4+φ/2)] = 1/cosφ`) : la formule codée dans le test
+(`Nq·(π/cos²φ + 2/cosφ)` pour `dNq/dφ`, puis `dNγ/dφ` par dérivée du produit) est exacte,
+confirmée terme à terme. `T_SENS.1` compare bien à une dérivée fermée indépendante, pas à
+une quantité recalculée par le même utilitaire — non tautologique. L'utilitaire
+`calculerSensibiliteParametrique` restaure systématiquement la valeur nominale via
+`try/finally`, y compris en cas d'exception. Rien à corriger.
+
+### B. Finalisation phase 6 — ✅ acceptée
+
+`calculerStabiliteBishop` délègue maintenant entièrement à `calculerBishopPourCercle`
+(vrai `m_alpha(F)` itératif) au lieu de dupliquer un calcul divergent — le problème signalé
+dans la tâche combinée est résolu. `profilTerrainNaturel` (polyligne) ajouté à
+`ModeleTerrain`, lu par `OngletStabilite.tsx` avec repli raisonnable si absent. Recherche
+automatique de cercle critique branchée (bouton dédié). Renard hydraulique branché dans
+`OngletParoiPhasee.tsx`, correctement gardé (seulement si nappe amont au-dessus du fond de
+fouille). `casReferenceStabilite.json` ne contient qu'un placeholder explicite
+(`facteurSecuriteAttendu: null`), conforme à la consigne de ne rien inventer pour le §12.6.
+La formule de pente infinie de `T_STAB.2` est correcte (vérifiée, c'est une formule standard
+que j'avais moi-même fournie dans la spec). Rien à corriger.
+
+### C. Phase 7 — ❌ **non acceptée en l'état** : le solveur de plaque général ne converge pas
+
+`T_PLAQUE.1` (plaque simplement appuyée, sans ressort, écart 0.08 % vs Navier) est bien
+vérifié — mais **il valide une branche de code séparée** (`solveurPlaqueSurRessorts.ts`,
+chemin spécial `si conditionsBords==='appuye' && sansRessorts`, résolu par décomposition en
+deux Poisson successifs). Cette branche spéciale **n'est jamais utilisée en production** :
+`radierSurRessortsIteratifs.ts` appelle toujours `conditionsBords: 'libre'` avec de vrais
+ressorts de sol, ce qui emprunte l'**autre** branche (discrétisation biharmonique directe à
+13 points + Gauss-Seidel sur-relaxé/SOR, 500 itérations, ω=1.15) — jamais comparée à une
+référence indépendante. `T_PLAQUE.2` ne vérifie que la convergence de la boucle *externe*
+(mise à jour de `ks`), jamais celle du solveur de plaque *interne* à chaque appel — et
+`calculerRadierSurRessortsIteratifs` ne lit ni ne propage nulle part le champ `convergé`
+retourné par `resoudrePlaque2DSurRessorts`.
+
+**Vérifié indépendamment (diagnostic, pas dans la suite fournie)** : pour un radier 6×6 m,
+`ks` uniforme = 500 kN/m³, `conditionsBords: 'libre'` — configuration réaliste, proche de
+`T_PLAQUE.2` — le solveur interne ne converge **jamais** en 500 itérations, quelle que soit
+la finesse du maillage (`nx=ny=4, 6, 8, 12` testés). Pire : la flèche maximale retournée
+**n'est pas stable en raffinant le maillage** — 80.2 mm (nx=4) → 20.4 mm (nx=6) → 7.1 mm
+(nx=8) → 1.5 mm (nx=12) — alors qu'une solution correctement convergée devrait se stabiliser
+vers une valeur unique en raffinant. La valeur retournue à chaque appel est donc un instantané
+d'un état numérique encore en évolution, pas une flèche physique. C'est exactement le résultat
+faux-silencieux que le CDC §10 interdit — silencieux parce que rien ne remonte l'échec de
+convergence interne jusqu'à l'utilisateur, dans une boucle externe qui peut malgré tout se
+déclarer « convergée » (le critère externe ne compare que des tassements consécutifs, pas la
+justesse du champ sous-jacent).
+
+**Cause probable** : Gauss-Seidel/SOR est connu pour très mal converger sur un opérateur
+biharmonique (4ᵉ ordre) — le conditionnement du système se dégrade en O(h⁻⁴) quand le
+maillage se raffine, contrairement à un Laplacien (2ᵉ ordre, O(h⁻²)) où SOR fonctionne
+raisonnablement. Le solveur de poutre (`solveurPoutreRessorts.ts`) utilise une factorisation
+directe — c'est probablement la bonne direction ici aussi plutôt que du SOR pur, ou au moins
+une méthode itérative plus robuste (gradient conjugué préconditionné, multigrille) avec un
+budget d'itérations et une tolérance revus.
+
+**Pas corrigé maintenant** — refonte numérique non triviale, à ne pas bâcler. Tâche de suivi
+ci-dessous. **Phase 7 reste ❌ non validée** dans le tableau de phasage malgré le « 28/28 »
+global : ce nombre inclut un test qui ne couvre pas le chemin de code réellement utilisé.
+
+**Correctif minimal pas encore fait non plus** (à inclure dans la même tâche de suivi, pour
+qu'au moins l'échec cesse d'être silencieux même avant la refonte numérique) : propager
+`resPlaque.convergé` de chaque itération interne dans `convergence.avertissements` du
+résultat retourné par `calculerRadierSurRessortsIteratifs`.
+
+## Prochaines étapes (selon plan)
+
+1. **Solveur de plaque général (phase 7)** — ne converge pas en production (voir revue
+   ci-dessus). Reprendre `resoudrePlaque2DSurRessorts` pour le cas avec ressorts de sol :
+   remplacer le Gauss-Seidel/SOR par une résolution directe (cohérent avec
+   `solveurPoutreRessorts.ts`) ou une méthode itérative robuste pour opérateur biharmonique
+   (gradient conjugué préconditionné, multigrille) ; ajouter un test indépendant qui exerce
+   la branche `'libre'` + ressorts réellement utilisée (pas seulement `'appuye'` sans
+   ressort) ; propager `convergé` de chaque résolution interne dans les avertissements du
+   résultat itératif, pour qu'un futur échec reste visible même après correction.
+2. **Dérivation CPT pour la capacité axiale des pieux** — en attente du choix de méthode par
+   Henri (voir « Constat d'audit » plus haut). Ne pas envoyer à Gemini avant cette décision.
+3. **Groupe de pieux (§7.6)**, si un point restait ouvert après la revue ci-dessus — a priori
+   clos.
 
 ## Wiring restant (hors code de calcul)
 
