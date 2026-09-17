@@ -38,8 +38,8 @@ export const OngletStabilite: React.FC<OngletStabiliteProps> = ({ modele }) => {
       couches: modele.couches,
       hydrogeologie: modele.hydrogeologie,
       facteursSecurite: {
-        gamma_phi: modele.configurationNormative.facteursPartielsSol.M1.gamma_phi,
-        gamma_c: modele.configurationNormative.facteursPartielsSol.M1.gamma_c,
+        gamma_phi: modele.configurationNormative?.facteursSol?.M1?.gamma_phi ?? 1.0,
+        gamma_c: modele.configurationNormative?.facteursSol?.M1?.gamma_c ?? 1.0,
       },
       nbTranches,
     });

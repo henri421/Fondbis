@@ -53,6 +53,10 @@ export interface ResultatCapacitePieu {
   groupe: ResultatEffetDeGroupe & {
     chargeTotaleGroupe: number; // alias rétro-compatible
   };
+
+  // Garde-fous et traçabilité normative (CDC §10/§13 & Clause 7.6.2.3)
+  avertissements?: string[];
+  estProfilSynthetique?: boolean;
   
   clauseReference: string;
   statutNormatif: string;
@@ -74,8 +78,18 @@ export function calculerCapacitePieu(
   const sectionPointe = (Math.PI * diametre * diametre) / 4;
   const perimetreFût = Math.PI * diametre;
 
-  // Profils d'essais : si non fournis par campagne CPT, calculer à partir des couches traversées
-  let rcProfiles = profilsEssaisCalcules && profilsEssaisCalcules.length > 0 ? profilsEssaisCalcules : [];
+  // Profils d'essais :
+  // Priorité 1 : paramètre explicite profilsEssaisCalcules
+  // Priorité 2 : ouvrage.profilsEssais (saisie directe de l'ingénieur)
+  let rcProfiles: number[] = [];
+  if (profilsEssaisCalcules && profilsEssaisCalcules.length > 0) {
+    rcProfiles = [...profilsEssaisCalcules];
+  } else if (ouvrage.profilsEssais && ouvrage.profilsEssais.length > 0) {
+    rcProfiles = ouvrage.profilsEssais.map((p) => p.rcCalc).filter((v) => !isNaN(v) && v > 0);
+  }
+
+  const avertissements: string[] = [];
+  let estProfilSynthetique = false;
 
   if (rcProfiles.length === 0) {
     // Calcul direct à partir des couches géotechniques
@@ -106,8 +120,14 @@ export function calculerCapacitePieu(
     }
 
     const rcTotal = Rb_estime + Rs_estime;
-    // Par défaut, créer 3 profils avec légère dispersion pour illustrer la norme
-    rcProfiles = [rcTotal * 0.95, rcTotal * 1.05, rcTotal * 0.98];
+    // CDC §7.6.2.3 & Revue Claude 2026-09-16 :
+    // Pas de dispersion artificielle en 3 profils synthétiques.
+    // Utiliser cette estimation comme UN SEUL profil (n = 1) avec xi3/xi4 correspondants (plus défavorables, honnêtes)
+    rcProfiles = [rcTotal];
+    estProfilSynthetique = true;
+    avertissements.push(
+      "Estimation indicative depuis φ'/c'/cu des couches, pas un vrai profil d'essai — saisir les Rc;calc réels pour une valeur normative fiable."
+    );
   }
 
   // Corrélation selon Clause 7.6.2.3 & Tableau A.10
@@ -209,6 +229,8 @@ export function calculerCapacitePieu(
       ...resultatGroupe,
       chargeTotaleGroupe: Number(resultatGroupe.chargeTotaleGroupe_Ed.toFixed(1)),
     },
+    avertissements,
+    estProfilSynthetique,
     clauseReference: CLAUSES_EC7.correlation_pieux.clause,
     statutNormatif: CLAUSES_EC7.correlation_pieux.statut,
   };
@@ -254,6 +276,8 @@ export interface ResultatVerificationPieuAxial {
     tassement: ResultatEffetDeGroupe['tassement'];
     synthese: string;
   };
+  avertissements?: string[];
+  estProfilSynthetique?: boolean;
 }
 
 export function verifierPieuAxial(
@@ -261,11 +285,14 @@ export function verifierPieuAxial(
   couches: CoucheGeotechnique[],
   config: ConfigurationNormative,
   hydrogeologie: Hydrogeologie,
-  campagnes?: any // TODO (revue Claude 2026-09-15) : pas encore utilisé — voir DEVPLAN.md,
-  // dérivation de Rc;calc depuis un vrai profil CPT/PMT/SPT à faire (§7.4 CDC), la
-  // capacité utilise pour l'instant une estimation à partir de c'/φ'/cu des couches
+  campagnes?: any
 ): ResultatVerificationPieuAxial {
-  const resCapacite = calculerCapacitePieu(ouvrage, couches, hydrogeologie, config);
+  const profilsCalcules =
+    ouvrage.profilsEssais && ouvrage.profilsEssais.length > 0
+      ? ouvrage.profilsEssais.map((p) => p.rcCalc).filter((v) => !isNaN(v) && v > 0)
+      : undefined;
+
+  const resCapacite = calculerCapacitePieu(ouvrage, couches, hydrogeologie, config, profilsCalcules);
 
   const perimetreFût = Math.PI * ouvrage.diametre;
   const detailsCouches: ResultatVerificationPieuAxial['detailsCouches'] = [];
@@ -323,6 +350,8 @@ export function verifierPieuAxial(
       tassement: resCapacite.groupe.tassement,
       synthese: resCapacite.groupe.synthese,
     },
+    avertissements: resCapacite.avertissements,
+    estProfilSynthetique: resCapacite.estProfilSynthetique,
   };
 }
 

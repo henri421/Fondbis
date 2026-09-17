@@ -769,6 +769,22 @@ faire (`T3.1` validé) une fois les vrais `Rc;calc` fournis.
    niveau du moteur — ajouter seulement un test UI/wiring léger si pertinent, pas dupliquer
    la couverture normative).
 
+**Mise en œuvre (2026-09-17) :**
+- **Moteur (`capaciteAxiale.ts`)** :
+  - Suppression de la dispersion synthétique en 3 profils artificiels (`rcTotal * 0.95/1.05/0.98`).
+  - Utilisation directe des profils réels (`ouvrage.profilsEssais` ou argument direct `profilsEssaisCalcules`).
+  - Repli en profil unique ($n=1$, $\xi_3=\xi_4=1.40$) lorsque aucun profil n'est renseigné, avec transmission de l'avertissement normatif explicite :
+    *« Estimation indicative depuis φ'/c'/cu des couches, pas un vrai profil d'essai — saisir les Rc;calc réels pour une valeur normative fiable. »*
+  - Propagation des champs `avertissements` et `estProfilSynthetique` dans `ResultatCapacitePieu` et `ResultatVerificationPieuAxial`.
+- **Interface (`OngletPieux.tsx`)** :
+  - Ajout d'une section dédiée interactive **« 2. Profils d'Essai (Rc;calc) — Voie 2 (Clause 7.6.2.3) »**.
+  - Tableau dynamique avec ajout / modification / suppression de lignes (`reference`, `rcCalc` en kN).
+  - Bandeau d'avertissement visible en cas de repli indicatif $n=1$, et barre de corrélation instantanée ($n$, moyenne, minimum, $\xi_3$, $\xi_4$, branche gouvernante).
+  - Badge « Repli n=1 » sur la carte de corrélation si aucun profil réel n'est saisi.
+- **Validation (`acceptanceTests.ts`)** :
+  - Ajout du test `T3.3` validant l'identité parfaite entre profils saisis manuellement et appel moteur, ainsi que la stricte conformité du repli unitaire $n=1$ ($\xi=1.40$) avec son avertissement.
+  - **Bilan : 30 / 30 tests d'acceptation validés (100%)**, `lint` et `build` impeccables.
+
 ## Prochaines étapes (selon plan)
 
 1. **Groupe de pieux (§7.6)** : a priori clos après la revue précédente (Converse-Labarre

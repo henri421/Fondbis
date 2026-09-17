@@ -161,6 +161,12 @@ export interface OuvrageRadier {
   coteTerrainFini: number;
 }
 
+export interface ProfilEssaiPieu {
+  id: string;
+  reference: string; // Ex: 'CPT-01', 'Sondage S1'
+  rcCalc: number; // kN (capacité calculée Rc;calc pour ce profil)
+}
+
 export interface OuvragePieu {
   id: string;
   nom: string;
@@ -185,6 +191,8 @@ export interface OuvragePieu {
     nbPieuxY: number;
     entraxe: number; // m
   };
+  // Profils d'essais pour application des facteurs de corrélation (EN 1997-1 §7.6.2.3 Voie 2)
+  profilsEssais?: ProfilEssaiPieu[];
 }
 
 export interface AppuiPhase {

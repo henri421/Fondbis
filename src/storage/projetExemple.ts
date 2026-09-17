@@ -264,6 +264,11 @@ export const PROJET_EXEMPLE_EC7: ModeleTerrain = {
           nbPieuxY: 1,
           entraxe: 2.40,
         },
+        profilsEssais: [
+          { id: 'PE-01', reference: 'Sondage CPT-01', rcCalc: 2450 },
+          { id: 'PE-02', reference: 'Sondage CPT-02', rcCalc: 2600 },
+          { id: 'PE-03', reference: 'Sondage CPT-03', rcCalc: 2380 },
+        ],
       },
       {
         id: 'PIEU-GRP',

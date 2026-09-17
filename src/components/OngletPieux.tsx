@@ -1,8 +1,20 @@
 import React, { useState } from 'react';
-import { ModeleTerrain, OuvragePieu } from '../types/geotech';
+import { ModeleTerrain, OuvragePieu, ProfilEssaiPieu } from '../types/geotech';
 import { verifierPieuAxial } from '../modules/pieux/capaciteAxiale';
 import { VuePieuTransversal } from './pieux/VuePieuTransversal';
-import { ShieldAlert, ShieldCheck, Layers, Users, ArrowDown, HelpCircle, Activity } from 'lucide-react';
+import {
+  ShieldAlert,
+  ShieldCheck,
+  Layers,
+  Users,
+  ArrowDown,
+  HelpCircle,
+  Activity,
+  Plus,
+  Trash2,
+  AlertTriangle,
+  FileSpreadsheet,
+} from 'lucide-react';
 
 interface OngletPieuxProps {
   modele: ModeleTerrain;
@@ -59,6 +71,35 @@ export const OngletPieux: React.FC<OngletPieuxProps> = ({ modele, onUpdatePieu }
         ...pieuActif.groupe,
         [champ]: val,
       },
+    });
+  };
+
+  const profilsEssais = pieuActif.profilsEssais || [];
+
+  const handleAjouterProfil = () => {
+    const nouveauNum = profilsEssais.length + 1;
+    const nouveauProfil: ProfilEssaiPieu = {
+      id: `PE-${Date.now().toString(36)}-${nouveauNum}`,
+      reference: `Sondage CPT-${nouveauNum.toString().padStart(2, '0')}`,
+      rcCalc: Math.round(resPieu.R_ck > 0 ? resPieu.R_ck * 1.3 : 2000),
+    };
+    onUpdatePieu({
+      ...pieuActif,
+      profilsEssais: [...profilsEssais, nouveauProfil],
+    });
+  };
+
+  const handleModifierProfil = (id: string, champ: keyof ProfilEssaiPieu, val: any) => {
+    onUpdatePieu({
+      ...pieuActif,
+      profilsEssais: profilsEssais.map((p) => (p.id === id ? { ...p, [champ]: val } : p)),
+    });
+  };
+
+  const handleSupprimerProfil = (id: string) => {
+    onUpdatePieu({
+      ...pieuActif,
+      profilsEssais: profilsEssais.filter((p) => p.id !== id),
     });
   };
 
@@ -312,11 +353,156 @@ export const OngletPieux: React.FC<OngletPieuxProps> = ({ modele, onUpdatePieu }
         </div>
       </div>
 
-      {/* 2. Synthèse et Vérification Normative EC7 */}
+      {/* 2. Profils d'essai (Rc;calc) — Voie 2 (EN 1997-1 Clause 7.6.2.3) */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+        <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider">
+              2. Profils d'Essai (Rc;calc) — Voie 2 (Clause 7.6.2.3)
+            </h3>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+              {profilsEssais.length > 0
+                ? `${profilsEssais.length} profil${profilsEssais.length > 1 ? 's' : ''} saisi${profilsEssais.length > 1 ? 's' : ''}`
+                : 'Saisie directe'}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleAjouterProfil}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Ajouter un profil (Rc;calc)</span>
+          </button>
+        </div>
+
+        <div className="p-4 space-y-3">
+          {resPieu.avertissements && resPieu.avertissements.length > 0 && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <div className="font-bold">Mode indicatif sans profil d'essai réel (CDC §10/§13)</div>
+                {resPieu.avertissements.map((a, idx) => (
+                  <div key={idx} className="text-[11px] text-amber-800">
+                    {a}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {profilsEssais.length === 0 ? (
+            <div className="text-center py-6 px-4 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+              <FileSpreadsheet className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+              <p className="text-xs font-semibold text-slate-700">
+                Aucun profil d'essai renseigné
+              </p>
+              <p className="text-[11px] text-slate-500 max-w-xl mx-auto mt-1">
+                En l'absence de profil d'essai saisi, la norme impose le jeu de coefficients le plus défavorable
+                (<strong>n = 1, ξ₃ = ξ₄ = 1.40</strong>) sur une estimation indicative issue des couches de sol.
+                Saisissez les <strong>Rc;calc</strong> réels de vos sondages (CPT, PMT, etc.) pour appliquer les facteurs d'échantillonnage de la Voie 2 (Tableaux A.9 / A.10).
+              </p>
+              <button
+                type="button"
+                onClick={handleAjouterProfil}
+                className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold transition"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Saisir un profil d'essai (Rc;calc)</span>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
+                    <tr>
+                      <th className="p-2 font-medium w-12 text-center">N°</th>
+                      <th className="p-2 font-medium">Référence du sondage / profil d'essai</th>
+                      <th className="p-2 font-medium w-48 text-right">Rc;calc (kN)</th>
+                      <th className="p-2 font-medium w-16 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-mono">
+                    {profilsEssais.map((p, index) => (
+                      <tr key={p.id} className="hover:bg-slate-50">
+                        <td className="p-2 text-center text-slate-500 font-sans">{index + 1}</td>
+                        <td className="p-2">
+                          <input
+                            type="text"
+                            value={p.reference}
+                            onChange={(e) => handleModifierProfil(p.id, 'reference', e.target.value)}
+                            placeholder="Ex: CPT-01, Sondage S1..."
+                            className="w-full px-2 py-1 border border-slate-300 rounded font-sans text-xs text-slate-900 bg-white"
+                          />
+                        </td>
+                        <td className="p-2 text-right">
+                          <input
+                            type="number"
+                            step="10"
+                            min="1"
+                            value={p.rcCalc}
+                            onChange={(e) => handleModifierProfil(p.id, 'rcCalc', parseFloat(e.target.value) || 0)}
+                            className="w-36 px-2 py-1 border border-slate-300 rounded font-mono font-bold text-xs text-right text-slate-900 bg-white ml-auto block"
+                          />
+                        </td>
+                        <td className="p-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleSupprimerProfil(p.id)}
+                            title="Supprimer ce profil"
+                            className="p-1 text-slate-400 hover:text-rose-600 transition rounded"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Synthèse de corrélation Voie 2 */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex flex-wrap items-center gap-4 text-slate-600">
+                  <div>
+                    Nombre d'essais : <strong className="text-slate-900 font-mono">{resPieu.facteursCorrelation.nProfils}</strong>
+                  </div>
+                  <div>
+                    Moyenne Rc;calc :{' '}
+                    <strong className="text-slate-900 font-mono">
+                      {(profilsEssais.reduce((s, p) => s + p.rcCalc, 0) / profilsEssais.length).toFixed(1)} kN
+                    </strong>
+                  </div>
+                  <div>
+                    Minimum Rc;calc :{' '}
+                    <strong className="text-slate-900 font-mono">
+                      {Math.min(...profilsEssais.map((p) => p.rcCalc)).toFixed(1)} kN
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="text-[11px] text-slate-500">
+                    ξ₃ = <strong className="text-slate-800">{resPieu.facteursCorrelation.xi3}</strong> | ξ₄ ={' '}
+                    <strong className="text-slate-800">{resPieu.facteursCorrelation.xi4}</strong>
+                  </div>
+                  <div className="text-[11px] bg-blue-100 text-blue-900 px-2 py-0.5 rounded font-medium">
+                    Gouvernant : {resPieu.facteursCorrelation.gouvernant}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 3. Synthèse et Vérification Normative EC7 */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
         <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-900 text-sm">Capacité Portante Axiale ELU (Approche DA2*)</span>
+            <span className="font-bold text-slate-900 text-sm">3. Capacité Portante Axiale ELU (Approche DA2*)</span>
             <span className="text-[11px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-mono">
               DA2* (A1 "+" M1 "+" R2)
             </span>
@@ -393,7 +579,14 @@ export const OngletPieux: React.FC<OngletPieuxProps> = ({ modele, onUpdatePieu }
 
           {/* Carte 3 : Corrélation et profil sondage */}
           <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/50 text-xs space-y-2">
-            <span className="font-bold text-blue-950 block">Facteurs de Corrélation (Tableau A.9)</span>
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-blue-950 block">Facteurs de Corrélation (Tableau A.9)</span>
+              {resPieu.estProfilSynthetique && (
+                <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-medium">
+                  Repli n=1
+                </span>
+              )}
+            </div>
             <div className="flex justify-between text-slate-600">
               <span>Nombre de profils n :</span>
               <span className="font-mono font-bold text-slate-800">{resPieu.facteursCorrelation.nProfils}</span>

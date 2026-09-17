@@ -5,7 +5,7 @@ import { calculerParametresDeCalcul } from '../core/deriveesSol';
 import { verifierPortanceRadierELU } from '../modules/radier/portanceELU';
 import { calculerTassementSousCoucheOedométrique } from '../modules/radier/tassementELS';
 import { calculerPousseeSimple } from '../modules/soutenement/pousseeButee';
-import { calculerCapacitePieu } from '../modules/pieux/capaciteAxiale';
+import { calculerCapacitePieu, verifierPieuAxial } from '../modules/pieux/capaciteAxiale';
 
 export interface TestResultatIndividuel {
   id: string;
@@ -386,6 +386,63 @@ export function executerTestsAcceptation(config: ConfigurationNormative = CONFIG
       tassementIsole_mm: s_isole,
       tassementGroupe_mm: s_groupe,
       ratioAmplification: resT32.groupe.tassement.ratioAmplification,
+    },
+  });
+
+  // ----------------------------------------------------
+  // T3.3 : Saisie directe des profils d'essai (Rc;calc) — Voie 2 (Clause 7.6.2.3)
+  // CDC §7.6.2.3 & Revue Claude 2026-09-16
+  // 1) Identité entre saisie directe profilsEssais et argument de fonction
+  // 2) Repli honnête n = 1 (sans fabrication artificielle de dispersion) avec avertissement
+  // ----------------------------------------------------
+  const ouvrageAvecProfils = {
+    ...ouvragePieuT31,
+    id: 'PIEU_T33_MANUEL',
+    nom: 'Pieu test T3.3 saisie directe',
+    profilsEssais: [
+      { id: 'S1', reference: 'Sondage CPT-01', rcCalc: 950 },
+      { id: 'S2', reference: 'Sondage CPT-02', rcCalc: 1100 },
+      { id: 'S3', reference: 'Sondage CPT-03', rcCalc: 950 },
+    ],
+  };
+
+  const resManuel = verifierPieuAxial(ouvrageAvecProfils, [coucheT1], config, hydroSansNappe);
+  const correspondance_ok = Math.abs(resManuel.R_ck - resT31.Rc_k) < 1e-3 && resManuel.facteursCorrelation.nProfils === 3;
+
+  const ouvrageSansProfil = {
+    ...ouvragePieuT31,
+    id: 'PIEU_T33_SANS_PROFIL',
+    nom: 'Pieu test T3.3 repli n=1',
+    profilsEssais: [],
+  };
+
+  const resSansProfil = verifierPieuAxial(ouvrageSansProfil, [coucheT1], config, hydroSansNappe);
+  const nEstUn_ok = resSansProfil.facteursCorrelation.nProfils === 1;
+  const xi140_ok = resSansProfil.facteursCorrelation.xi3 === 1.40 && resSansProfil.facteursCorrelation.xi4 === 1.40;
+  const avertissement_ok = (resSansProfil.avertissements?.length ?? 0) > 0 && !!resSansProfil.estProfilSynthetique;
+
+  const t33_succes = correspondance_ok && nEstUn_ok && xi140_ok && avertissement_ok;
+
+  resultats.push({
+    id: 'T3.3',
+    nom: "Profils d'essai Rc;calc — Voie 2 directe & repli unitaire n=1 (CDC §7.6.2.3)",
+    phase: 'Phase 3',
+    description: 'Vérification de la concordance saisie directe vs moteur, et repli honnête n=1 (ξ=1.40) avec avertissement normatif',
+    valeurAttendue: 'Rc;k = 751.9 kN (n=3) | n=1, ξ3=ξ4=1.40 et avertissement émis si aucun profil',
+    valeurObtenue: `Direct: Rc;k=${resManuel.R_ck.toFixed(1)} kN (n=${resManuel.facteursCorrelation.nProfils}) | Sans profil: n=${resSansProfil.facteursCorrelation.nProfils}, ξ3=${resSansProfil.facteursCorrelation.xi3}, avertissement="${resSansProfil.avertissements?.[0] ? 'OUI' : 'NON'}"`,
+    tolerance: 'Identité exacte, n=1 et avertissement requis',
+    ecartAbsolu: Number(Math.abs(resManuel.R_ck - resT31.Rc_k).toFixed(3)),
+    ecartPourcentage: 0,
+    succes: t33_succes,
+    message: t33_succes
+      ? "Saisie directe parfaitement reliée au moteur Voie 2 et repli n=1 honnête avec avertissement normatif validé"
+      : "Écart de correspondance entre profils saisis et calculs ou échec du repli n=1",
+    details: {
+      Rc_k_direct: resManuel.R_ck,
+      n_profils_direct: resManuel.facteursCorrelation.nProfils,
+      n_profils_repli: resSansProfil.facteursCorrelation.nProfils,
+      xi3_repli: resSansProfil.facteursCorrelation.xi3,
+      avertissement_repli: resSansProfil.avertissements?.[0],
     },
   });
 
