@@ -2,6 +2,12 @@ import React, { useRef, useState, useEffect } from 'react';
 import { CoucheGeotechnique, Hydrogeologie, OuvrageRadier, OuvragePieu, OuvrageSoutenement } from '../types/geotech';
 import { ZoomIn, ZoomOut, RotateCcw, Layers } from 'lucide-react';
 
+// Tronque un libellé de couche pour qu'il tienne dans le cartouche de la coupe (largeur fixe
+// ~240px) — un <text> SVG ne wrappe ni ne coupe automatiquement, un nom trop long déborde
+// silencieusement hors du cartouche et devient illisible plutôt que d'être coupé proprement.
+const tronquerLabel = (texte: string, maxChars: number): string =>
+  texte.length > maxChars ? `${texte.slice(0, maxChars - 1).trimEnd()}…` : texte;
+
 interface CoupeDeSolCanvasProps {
   coteTerrainNaturel: number;
   couches: CoucheGeotechnique[];
@@ -211,10 +217,14 @@ export const CoupeDeSolCanvas: React.FC<CoupeDeSolCanvasProps> = ({
                     strokeWidth="0.8"
                   />
                   <text x="-8" y="13" textAnchor="end" fill="#0f172a" fontSize="10.5" fontWeight="700">
-                    {c.nom}
+                    {tronquerLabel(c.nom, 30)}
+                    <title>{c.nom}</title>
                   </text>
                   <text x="-8" y="25" textAnchor="end" fill="#475569" fontSize="9" fontWeight="500">
-                    ép. {c.epaisseur.toFixed(2)}m • φ'={c.resistanceDrainee.phiPrime.v}° • c'={c.resistanceDrainee.cPrime.v} kPa
+                    {tronquerLabel(
+                      `ép. ${c.epaisseur.toFixed(2)}m • φ'=${c.resistanceDrainee.phiPrime.v}° • c'=${c.resistanceDrainee.cPrime.v} kPa`,
+                      38
+                    )}
                   </text>
                 </g>
 

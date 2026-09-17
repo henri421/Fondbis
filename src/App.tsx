@@ -212,7 +212,11 @@ export default function App() {
       )}
 
       {/* 3. Barre des onglets de calcul */}
-      <nav className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-xs">
+      <nav className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-xs relative">
+        {/* Fondu indiquant que la barre défile horizontalement (les onglets peuvent dépasser
+            la largeur visible) — sans lui, un onglet tronqué en bord de fenêtre ressemble à
+            un bug plutôt qu'à une invitation à faire défiler. */}
+        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-white to-transparent z-10" />
         <div className="max-w-7xl mx-auto px-4 flex space-x-1 overflow-x-auto py-1">
           <button
             id="tab-btn-radier"
