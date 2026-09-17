@@ -802,6 +802,84 @@ la suite CLI ne couvre que le calcul, pas le rendu — un composant peut planter
 qu'aucun test ne le voie. À garder en tête, ouvrir l'app dans un navigateur de temps en temps
 serait plus sûr que de se fier uniquement à `npm run test:acceptance` + `tsc`.
 
+## Bug sérieux trouvé en ouvrant l'app dans un navigateur (2026-09-17, Claude)
+
+Jusqu'ici toutes mes revues passaient par `npm run test:acceptance` (CLI, ne rend jamais
+l'UI) — je n'avais pas encore ouvert l'app dans un vrai navigateur cette session. Fait pour
+préparer une proposition d'amélioration graphique, et ça a immédiatement révélé un bug de
+fond sur l'onglet Paroi Phasée du projet d'exemple : la tuile **« Déplacement max »**
+affichait **1 652 277 739 750 mm** (1,65 milliard de mètres). Pas un défaut d'affichage — la
+valeur vient bien du moteur de calcul.
+
+**Cause 1 — corrigée : géométrie par défaut de l'onglet déconnectée du projet.**
+`OngletParoiPhasee.tsx` utilisait des cotes absolues codées en dur (`coteTete=100`,
+`coteBase=88`, phases à 97/94/92) quand aucune paroi n'est encore enregistrée sur le projet
+— alors que la stratigraphie réelle du projet d'exemple est à ~225-245 m NGF. Conséquence en
+cascade : `calculerProfilContraintes` n'accumule aucune contrainte verticale pour des cotes
+qui ne recoupent aucune couche réelle (`sigma_v` reste à 0), tandis que la pression
+interstitielle continue d'être calculée à partir de la nappe réelle (~244 m) appliquée à ces
+cotes fictives (~88-100 m) — soit ~150 m de colonne d'eau fictive. Résultat :
+`sigma'_v` fortement négative, donc `Pa=Pp=0` partout (bornées à `max(0,…)`), donc des
+ressorts de sol à capacité nulle (`reactionMax=reactionMin=0`), donc une paroi sans aucune
+retenue latérale réelle — un mécanisme numérique qui converge vers une valeur arbitraire
+énorme au lieu d'être détecté comme instable.
+
+Corrigé (`OngletParoiPhasee.tsx`) : `coteTete`/`coteBase`/phases par défaut dérivés de
+`modele.referentiel.coteTerrainNaturel` au lieu de constantes absolues. Vérifié en relançant
+l'app dans un navigateur (Playwright) : Phase 1 et 2 du projet d'exemple passent de valeurs
+absurdes à des résultats physiquement sensés (`u_max=1.4mm`, `butée mobilisée=92%` puis
+`100%`). 30/30 tests, lint et build inchangés (ce chemin de code n'était testé par aucun
+test CLI, géométrie/stratigraphie toujours alignées dans les fixtures de test — c'est
+justement pour ça que ce bug n'avait jamais été vu).
+
+**Cause 2 — pas corrigée, plus profonde : le solveur ne détecte pas l'insuffisance de
+capacité passive.** Même avec la géométrie corrigée, la **Phase 3** du projet d'exemple
+(fiche restante ≈ 4 m après excavation à -8 m, buton modeste 500 kN/m de capacité) reproduit
+exactement le même symptôme : `Déplacement max = 1 652 277 739 750 mm`,
+`Mobilisation butée = 100 % — « Attention : plastification limite ! »` déjà affiché, mais la
+valeur de déplacement elle-même reste une énormité silencieuse à côté de cet avertissement.
+Cas cette fois **physiquement réel** : la fiche est réellement insuffisante pour cette
+profondeur d'excavation avec ce buton — mais au lieu de signaler clairement l'instabilité
+(comme `T_SOLV.5` sait le faire pour un DDL singulier dans le solveur de poutre 1D isolé), le
+solveur élastoplastique de `resoudrePoutreSurRessorts` (Newton sur raideur sécante) converge
+numériquement vers une solution qui satisfait son critère relatif tout en étant physiquement
+absurde. Exactement le résultat faux-silencieux que le CDC §10 interdit — et potentiellement
+dangereux si un ingénieur pressé ne remarque que le chiffre de moment (plausible en
+apparence, 319.7 kNm/m) sans regarder le déplacement.
+
+**Non corrigé maintenant** — touche au cœur du solveur non linéaire partagé (paroi phasée
+ET pieu transversal l'utilisent), pas une correction ponctuelle. Tâche de suivi ci-dessous.
+
+## Tâche à envoyer à Gemini (priorité haute) : détection d'insuffisance de capacité passive
+
+**Contexte** : voir « Bug sérieux trouvé en ouvrant l'app dans un navigateur » ci-dessus,
+Cause 2. Reproductible avec le projet d'exemple, onglet Paroi Phasée, Phase 3 (excavation à
+-8m, fiche restante ~4m, buton 500 kN/m) : `deplacementMaxAbsolu` explose à ~1.65e9 m alors
+que `mobilisationButeeMax=1.0` (butée entièrement plastifiée) — le système est en limite de
+capacité (voire mécanisme), mais `convergence.convergé=true` sans aucun avertissement.
+
+1. **Localiser dans `solveurPoutreRessorts.ts`** (`resoudrePoutreSurRessorts`) pourquoi le
+   critère de convergence peut être satisfait alors que le déplacement diverge. Hypothèse à
+   vérifier en premier : une fois tous les ressorts plastifiés (raideur tangente nulle sur le
+   DDL concerné), le système peut devenir numériquement quasi singulier sans franchir le
+   seuil de détection existant (`< 1e-13`, cf. `T_SOLV.5`) — un seuil relatif à l'échelle du
+   problème (pas seulement absolu) serait probablement plus robuste.
+2. **Ne pas se contenter d'abaisser le seuil au hasard.** Ajouter un garde-fou explicite et
+   testable : si le déplacement d'un nœud dépasse un multiple raisonnable de la longueur
+   élastique / des dimensions du problème (ex. > 1 m sur un ouvrage de quelques mètres) alors
+   que `mobilisationButeeMax` approche 1.0, considérer le système comme non convergé
+   (`convergé=false`) et émettre un avertissement explicite (« Capacité passive insuffisante
+   / mécanisme potentiel — fiche ou appuis à revoir »), plutôt que de renvoyer une valeur
+   numérique sans le signaler.
+3. **Test de non-régression** : reproduire exactement le cas Phase 3 ci-dessus (ou un cas
+   réduit équivalent) et vérifier que le résultat est maintenant soit un déplacement
+   physiquement borné, soit un échec de convergence explicitement signalé — jamais un nombre
+   à 10+ chiffres silencieux. Vérifier aussi que ça ne casse aucun des tests `T_SOLV.*` /
+   `T_PHASE.*` / `T_PIEU_LAT.*` existants (le solveur est partagé avec le pieu transversal).
+4. **Champ de recherche, pas de précipitation** : c'est le cœur numérique partagé par deux
+   modules déjà validés (paroi phasée, pieu transversal) — préférer un correctif ciblé et
+   testé à une réécriture large.
+
 ## Prochaines étapes (selon plan)
 
 1. **Groupe de pieux (§7.6)** : a priori clos après la revue précédente (Converse-Labarre

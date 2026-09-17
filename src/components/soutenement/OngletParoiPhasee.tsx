@@ -44,12 +44,19 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
     (s) => s.type === 'paroiFlexible'
   );
 
-  // Valeurs par défaut si non initialisé
+  // Valeurs par défaut si non initialisé : dérivées du terrain naturel RÉEL du projet, jamais
+  // de cotes absolues codées en dur — un écran de tête à 100/88 sans rapport avec la
+  // stratigraphie réelle (souvent à une tout autre altitude, ex. 245 m) produit un profil de
+  // pression limite nul partout (aucune couche ne recoupe cette plage), donc des ressorts de
+  // sol sans capacité et une paroi numériquement instable (voir revue Claude 2026-09-17).
+  const coteTNReelle = modele.referentiel.coteTerrainNaturel;
   const [coteTete, setCoteTete] = useState<number>(
-    soutenementExistant?.coteTete ?? 100.0
+    soutenementExistant?.coteTete ?? coteTNReelle
   );
   const [coteBase, setCoteBase] = useState<number>(
-    soutenementExistant?.coteFondFouille ? soutenementExistant.coteFondFouille - 6.0 : 88.0
+    soutenementExistant?.coteFondFouille
+      ? soutenementExistant.coteFondFouille - 6.0
+      : coteTNReelle - 12.0
   );
   const [epaisseur, setEpaisseur] = useState<number>(
     soutenementExistant?.epaisseurVoile ?? 0.6
@@ -71,17 +78,17 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
       {
         numero: 1,
         nom: 'Phase 1 : Terrassement provisoire (-3.0 m)',
-        coteFondFouille: 97.0,
+        coteFondFouille: coteTNReelle - 3.0,
       },
       {
         numero: 2,
         nom: 'Phase 2 : Pose Buton lit 1 + Fouille intermédiaire (-6.0 m)',
-        coteFondFouille: 94.0,
+        coteFondFouille: coteTNReelle - 6.0,
       },
       {
         numero: 3,
         nom: 'Phase 3 : Terrassement final fond de fouille (-8.0 m)',
-        coteFondFouille: 92.0,
+        coteFondFouille: coteTNReelle - 8.0,
       },
     ];
   });
@@ -94,7 +101,7 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
     return [
       {
         id: 'BUTON-01',
-        cote: 98.0,
+        cote: coteTNReelle - 2.0,
         type: 'buton',
         raideur: 100000, // 100 MN/m = 100 000 kN/m
         reactionMax: 500, // 500 kN/m
