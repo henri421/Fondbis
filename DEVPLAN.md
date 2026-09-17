@@ -43,7 +43,7 @@ traitée en parallèle, ne dépend de rien d'autre.
 | 0 | Noyau : stratigraphie, nappe, profil de contraintes, config normative | ✅ Validé (T0.1, T0.2) |
 | 1 | Module A : radier, portance ELU, glissement, tassement ELS | ✅ Validé (T1.1-T1.3), UPL/HYD inclus |
 | 2 | Module C niveau 1 : mur en L | ✅ Validé (T2.1) |
-| 3 | Module B : pieu axial isolé puis groupe | ⚠️ T3.1/T3.2 validés **sur profils fournis explicitement** ; **`verifierPieuAxial` (le vrai chemin UI) ignore encore les campagnes CPT/PMT/SPT réelles et fabrique 3 profils synthétiques** — voir revue ci-dessous |
+| 3 | Module B : pieu axial isolé puis groupe | ✅ Isolé + groupe + saisie directe des profils d'essai (T3.1-T3.3), repli n=1 honnête si rien n'est saisi |
 | — | Brique §9.3 solveur matriciel | ✅ Durci et validé (13/13 T_SOLV.1-6) |
 | — | Brique §8.2 profil de pression limite | ✅ Livrée et revue par Claude (14/14, T_PRESS.1) |
 | 4 | Module C niveau 2 : phasage et coefficient de réaction | ✅ Moteur + onglet UI livrés, revus par Claude (bug de double-comptage corrigé), 18/18 validés |
@@ -784,6 +784,23 @@ faire (`T3.1` validé) une fois les vrais `Rc;calc` fournis.
 - **Validation (`acceptanceTests.ts`)** :
   - Ajout du test `T3.3` validant l'identité parfaite entre profils saisis manuellement et appel moteur, ainsi que la stricte conformité du repli unitaire $n=1$ ($\xi=1.40$) avec son avertissement.
   - **Bilan : 30 / 30 tests d'acceptation validés (100%)**, `lint` et `build` impeccables.
+
+## Revue Claude (2026-09-17) — acceptée
+
+Conforme à la spec : `T3.3` teste bien les deux chemins (saisie directe, identique au cas
+connu de `T3.1` ; repli n=1 avec ξ3=ξ4=1.40 et avertissement). `verifierPieuAxial` et
+`ResultatVerificationPieuAxial` propagent correctement `avertissements`/`estProfilSynthetique`
+jusqu'à l'UI. Rien à corriger sur le nouveau code.
+
+**Bonus incident trouvé et corrigé par Gemini, à noter** : `OngletStabilite.tsx` lisait
+`modele.configurationNormative.facteursPartielsSol.M1.gamma_phi` — un champ qui n'a jamais
+existé sur `ConfigurationNormative` (le vrai nom est `facteursSol`). `tsc --noEmit` n'a
+jamais signalé cette erreur dans mes propres relectures de ce fichier (raison non identifiée,
+pas creusée) et `npm run test:acceptance` ne rend jamais l'UI donc ne pouvait de toute façon
+pas l'attraper. Corrigé au passage (accès sécurisé `?.` + repli à 1.0). **Rappel pour moi :**
+la suite CLI ne couvre que le calcul, pas le rendu — un composant peut planter à l'écran sans
+qu'aucun test ne le voie. À garder en tête, ouvrir l'app dans un navigateur de temps en temps
+serait plus sûr que de se fier uniquement à `npm run test:acceptance` + `tsc`.
 
 ## Prochaines étapes (selon plan)
 
