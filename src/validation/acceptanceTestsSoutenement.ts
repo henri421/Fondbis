@@ -6,6 +6,7 @@ import { calculerParoiPhasee } from '../modules/soutenement/paroiPhasee';
 import {
   calculerRepartitionProfileBlindage,
   verifierStabiliteFrontNonSoutenu,
+  verifierResistanceBlindagePose,
 } from '../modules/soutenement/berlinoise';
 
 /**
@@ -479,6 +480,43 @@ export function executerTestsAcceptationSoutenement(
       message: succes
         ? 'Hauteur critique correcte, cas stable et instable correctement distingués'
         : 'Écart sur Hc ou mauvaise classification stable/instable',
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // T_BERL.3 — Résistance du blindage posé, cas conforme et non conforme (§8.5)
+  // --------------------------------------------------------------------------
+  {
+    const pressionActive = 30.0; // kPa
+    const entraxe = 1.2; // m
+    const epaisseur = 0.05; // m
+    const momentDemandeAttendu = (30.0 * 1.2 ** 2) / 8; // 5.4 kNm/m
+
+    const casConforme = verifierResistanceBlindagePose(pressionActive, entraxe, epaisseur, 15000);
+    const casNonConforme = verifierResistanceBlindagePose(pressionActive, entraxe, epaisseur, 8000);
+
+    const ecart = Math.abs(casConforme.momentDemande - momentDemandeAttendu);
+    const succes =
+      ecart < 1e-6 &&
+      casConforme.conforme === true &&
+      casNonConforme.conforme === false &&
+      casConforme.momentDemande === casNonConforme.momentDemande;
+
+    resultats.push({
+      id: 'T_BERL.3',
+      nom: 'Résistance en flexion du blindage posé',
+      phase: 'Surcouche §8.5',
+      description:
+        'Pa=30 kPa, entraxe=1.2 m, epaisseur=5 cm -> moment demandé 5.4 kNm/m. Contrainte admissible 15 MPa -> conforme, 8 MPa -> non conforme.',
+      valeurAttendue: `momentDemande = ${momentDemandeAttendu.toFixed(2)} kNm/m ; conforme(15MPa)=true ; conforme(8MPa)=false`,
+      valeurObtenue: `momentDemande = ${casConforme.momentDemande.toFixed(2)} kNm/m ; conforme(15MPa)=${casConforme.conforme} (resistant=${casConforme.momentResistant.toFixed(2)}) ; conforme(8MPa)=${casNonConforme.conforme} (resistant=${casNonConforme.momentResistant.toFixed(2)})`,
+      tolerance: 'Exact sur le moment demandé, strict sur conforme',
+      ecartAbsolu: ecart,
+      ecartPourcentage: 0,
+      succes,
+      message: succes
+        ? 'Moment demandé correct, classification conforme/non conforme correcte selon la contrainte admissible'
+        : 'Écart sur le moment demandé ou mauvaise classification',
     });
   }
 

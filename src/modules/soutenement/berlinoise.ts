@@ -58,3 +58,24 @@ export function verifierStabiliteFrontNonSoutenu(
   const facteurSecurite = hauteurCritique / hauteurPasse;
   return { hauteurCritique, facteurSecurite, stable: facteurSecurite >= 1.0 };
 }
+
+export interface ResultatResistanceBlindage {
+  momentDemande: number; // kN.m/m
+  momentResistant: number; // kN.m/m
+  conforme: boolean;
+}
+
+/**
+ * Flexion du madrier une fois posé, poutre simplement appuyée entre deux profilés
+ * (portée = entraxe), sous la pression active Pa au niveau considéré.
+ */
+export function verifierResistanceBlindagePose(
+  pressionActive: number, // kPa
+  entraxeProfiles: number, // m
+  epaisseurBlindage: number, // m
+  contrainteAdmissible: number // kPa
+): ResultatResistanceBlindage {
+  const momentDemande = (pressionActive * entraxeProfiles ** 2) / 8;
+  const momentResistant = (contrainteAdmissible * epaisseurBlindage ** 2) / 6;
+  return { momentDemande, momentResistant, conforme: momentResistant >= momentDemande };
+}
