@@ -234,6 +234,17 @@ export interface OuvrageSoutenement {
   appuisPhases?: AppuiPhase[];
   EI?: number; // kN.m² rigidité de flexion de la paroi
   EA?: number; // kN rigidité axiale de la paroi
+  // Extension : surcouche Berlinoise (§8.5)
+  sousType?: 'continue' | 'berlinoise' | 'pieuxSecants';
+  parametresBerlinoise?: {
+    entraxeProfiles: number; // m
+    profile: { I: number; W: number; largeur: number }; // m⁴, m³, m — profilé isolé
+    blindage: {
+      hauteurPasse: number;         // m
+      epaisseur: number;            // m
+      contrainteAdmissible: number; // kPa
+    };
+  };
 }
 
 export interface ModeleTerrain {
