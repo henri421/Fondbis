@@ -982,6 +982,812 @@ en place, n'introduit pas de nouvelle navigation.
 ces briques déjà validées.
 
 
+### Plan d'implémentation — Surcouche Berlinoise
+
+> Exécution : inline, dans cette session (pas de dispatch multi-agents — périmètre
+> suffisamment contenu et déjà entièrement spécifié ci-dessus). TDD : chaque fonction est
+> testée isolément avec des fixtures numériques choisies à la main, sans dépendre d'un run
+> complet du solveur phasé (déjà couvert par `T_SOLV.*`/`T_PHASE.*` — pas dupliqué ici).
+
+**Fichiers touchés :**
+- Créer `src/modules/soutenement/berlinoise.ts` (moteur, 4 fonctions + orchestrateur)
+- Modifier `src/types/geotech.ts` (ajout `sousType`, `parametresBerlinoise` sur `OuvrageSoutenement`)
+- Modifier `src/validation/acceptanceTestsSoutenement.ts` (tests `T_BERL.1` à `T_BERL.4`)
+- Modifier `src/components/soutenement/OngletParoiPhasee.tsx` (UI : saisie + résultats)
+
+#### Tâche 1 : Types
+
+**Fichiers :** Modifier `src/types/geotech.ts:217-237` (`interface OuvrageSoutenement`)
+
+- [ ] **Étape 1.** Ajouter les champs suivants à `OuvrageSoutenement`, juste après `EA?: number;` (ligne 236) :
+```ts
+  // Extension : surcouche Berlinoise (§8.5)
+  sousType?: 'continue' | 'berlinoise' | 'pieuxSecants';
+  parametresBerlinoise?: {
+    entraxeProfiles: number; // m
+    profile: { I: number; W: number; largeur: number }; // m⁴, m³, m — profilé isolé
+    blindage: {
+      hauteurPasse: number;         // m
+      epaisseur: number;            // m
+      contrainteAdmissible: number; // kPa
+    };
+  };
+```
+- [ ] **Étape 2.** Vérifier la compilation : `npx tsc --noEmit`. Attendu : aucune erreur (champs optionnels, aucun site d'appel existant cassé).
+- [ ] **Étape 3.** Commit :
+```bash
+git add src/types/geotech.ts
+git commit -m "feat(soutenement): types pour la surcouche Berlinoise (§8.5)"
+```
+
+#### Tâche 2 : Répartition profilé/blindage
+
+**Fichiers :** Créer `src/modules/soutenement/berlinoise.ts` ; Test dans `src/validation/acceptanceTestsSoutenement.ts`
+
+- [ ] **Étape 1.** Créer `src/modules/soutenement/berlinoise.ts` avec l'en-tête et la première fonction :
+```ts
+/**
+ * Surcouche Berlinoise (EN 1997-1 §8.5) — post-traitement des résultats de
+ * `calculerParoiPhasee` (Niveau 2). Ne recalcule rien du moteur partagé.
+ */
+import {
+  ConfigurationNormative,
+  CoucheGeotechnique,
+  PhaseParoi,
+} from '../../types/geotech';
+import { ResultatCalculParoiPhasee } from './paroiPhasee';
+import { trouverCoucheACote } from '../../core/profilContraintes';
+
+export interface ParametresProfileBerlinoise {
+  entraxeProfiles: number; // m
+  profile: { I: number; W: number; largeur: number }; // m⁴, m³, m
+  blindage: { hauteurPasse: number; epaisseur: number; contrainteAdmissible: number };
+}
+
+export interface ResultatRepartitionProfileBlindage {
+  momentProfile: number; // kN.m, moment demandé sur UN profilé isolé
+  voûteNonPriseEnCompte: true;
+}
+
+/**
+ * Convertit le moment global "par mètre linéaire lissé" (sortie du solveur Niveau 2) en
+ * moment discret sur un profilé, en supposant qu'il reprend 100% de l'effort sur sa largeur
+ * tributaire (entraxe) — hypothèse conservatrice, pas de méthode de voûte sourcée disponible
+ * (cf. DEVPLAN, spec ci-dessus).
+ */
+export function calculerRepartitionProfileBlindage(
+  momentGlobalMaxParM: number, // kN.m/m — resultatPhase.momentMaxAbsolu
+  entraxeProfiles: number
+): ResultatRepartitionProfileBlindage {
+  return {
+    momentProfile: momentGlobalMaxParM * entraxeProfiles,
+    voûteNonPriseEnCompte: true,
+  };
+}
+```
+- [ ] **Étape 2.** Vérifier que ça compile : `npx tsc --noEmit`. Attendu : aucune erreur.
+- [ ] **Étape 3.** Ajouter le test `T_BERL.1` dans `src/validation/acceptanceTestsSoutenement.ts`. D'abord l'import en haut du fichier (à côté des imports existants) :
+```ts
+import {
+  calculerRepartitionProfileBlindage,
+} from '../modules/soutenement/berlinoise';
+```
+Puis, juste avant le `return resultats;` final du fichier, ajouter :
+```ts
+  // --------------------------------------------------------------------------
+  // T_BERL.1 — Répartition profilé/blindage, sans voûte (§8.5)
+  // --------------------------------------------------------------------------
+  {
+    const momentGlobalMaxParM = 150.0; // kNm/m, valeur de référence arbitraire
+    const entraxe = 1.2; // m
+
+    const rep = calculerRepartitionProfileBlindage(momentGlobalMaxParM, entraxe);
+    const momentProfileAttendu = 180.0; // 150 * 1.2, calcul à la main
+
+    const ecart = Math.abs(rep.momentProfile - momentProfileAttendu);
+    const succes = ecart < 1e-6 && rep.voûteNonPriseEnCompte === true;
+
+    resultats.push({
+      id: 'T_BERL.1',
+      nom: 'Répartition profilé/blindage sans réduction de voûte',
+      phase: 'Surcouche §8.5',
+      description:
+        'Conversion du moment global lissé (150 kNm/m) en moment sur un profilé isolé à entraxe 1.2 m, sans aucune réduction liée à un effet de voûte (hypothèse conservatrice).',
+      valeurAttendue: `momentProfile = ${momentProfileAttendu.toFixed(2)} kNm, voûteNonPriseEnCompte = true`,
+      valeurObtenue: `momentProfile = ${rep.momentProfile.toFixed(2)} kNm, voûteNonPriseEnCompte = ${rep.voûteNonPriseEnCompte}`,
+      tolerance: 'Exact (calcul déterministe)',
+      ecartAbsolu: ecart,
+      ecartPourcentage: 0,
+      succes,
+      message: succes
+        ? 'Répartition profilé/blindage conforme, hypothèse conservatrice bien signalée'
+        : 'Écart sur le moment redistribué au profilé',
+    });
+  }
+
+```
+- [ ] **Étape 4.** Lancer la suite : `npm run test:acceptance`. Attendu : `T_BERL.1` en SUCCÈS, tous les autres tests toujours à 100%.
+- [ ] **Étape 5.** Commit :
+```bash
+git add src/modules/soutenement/berlinoise.ts src/validation/acceptanceTestsSoutenement.ts
+git commit -m "feat(soutenement): répartition profilé/blindage Berlinoise (T_BERL.1)"
+```
+
+#### Tâche 3 : Stabilité du front non soutenu
+
+**Fichiers :** Modifier `src/modules/soutenement/berlinoise.ts` ; Test dans `acceptanceTestsSoutenement.ts`
+
+- [ ] **Étape 1.** Ajouter dans `berlinoise.ts` :
+```ts
+export interface ResultatStabiliteFrontNonSoutenu {
+  hauteurCritique: number; // m, Hc = 4.cu,d / gamma
+  facteurSecurite: number; // Hc / hauteurPasse
+  stable: boolean;
+}
+
+/**
+ * Stabilité à court terme d'une coupe verticale non soutenue en sol cohérent
+ * (Hc = 4.cu/gamma, formule classique de hauteur critique non soutenue).
+ */
+export function verifierStabiliteFrontNonSoutenu(
+  cu_k: number, // kPa
+  gamma_cu: number, // facteur partiel (facteursSol.M2.gamma_cu)
+  gammaHumide: number, // kN/m³
+  hauteurPasse: number // m
+): ResultatStabiliteFrontNonSoutenu {
+  const cu_d = cu_k / gamma_cu;
+  const hauteurCritique = (4 * cu_d) / gammaHumide;
+  const facteurSecurite = hauteurCritique / hauteurPasse;
+  return { hauteurCritique, facteurSecurite, stable: facteurSecurite >= 1.0 };
+}
+```
+- [ ] **Étape 2.** `npx tsc --noEmit` — attendu : aucune erreur.
+- [ ] **Étape 3.** Ajouter `T_BERL.2` (avant `return resultats;`), import `verifierStabiliteFrontNonSoutenu` ajouté à l'import existant de l'étape précédente :
+```ts
+  // --------------------------------------------------------------------------
+  // T_BERL.2 — Stabilité du front non soutenu, cas stable et instable (§8.5)
+  // --------------------------------------------------------------------------
+  {
+    const cu_k = 40.0; // kPa
+    const gamma_cu = 1.40; // M2 par défaut (CONFIG_NORMATIVE_DEFAUT)
+    const gammaHumide = 18.0; // kN/m³
+    const hauteurCritiqueAttendue = (4 * (cu_k / gamma_cu)) / gammaHumide; // 6.3492 m
+
+    const casStable = verifierStabiliteFrontNonSoutenu(cu_k, gamma_cu, gammaHumide, 1.5);
+    const casInstable = verifierStabiliteFrontNonSoutenu(cu_k, gamma_cu, gammaHumide, 8.0);
+
+    const ecartHc = Math.abs(casStable.hauteurCritique - hauteurCritiqueAttendue);
+    const succes =
+      ecartHc < 1e-3 &&
+      casStable.stable === true &&
+      casStable.facteurSecurite > 1.0 &&
+      casInstable.stable === false &&
+      casInstable.facteurSecurite < 1.0;
+
+    resultats.push({
+      id: 'T_BERL.2',
+      nom: 'Stabilité du front non soutenu (Hc = 4.cu/gamma)',
+      phase: 'Surcouche §8.5',
+      description:
+        'cu_k=40 kPa, gamma_cu=1.40 (M2), gamma=18 kN/m³ -> Hc=6.35 m. Passe de 1.5 m stable, passe de 8.0 m instable.',
+      valeurAttendue: `Hc = ${hauteurCritiqueAttendue.toFixed(2)} m ; stable(1.5m)=true ; stable(8.0m)=false`,
+      valeurObtenue: `Hc = ${casStable.hauteurCritique.toFixed(2)} m ; FS(1.5m)=${casStable.facteurSecurite.toFixed(2)} (stable=${casStable.stable}) ; FS(8.0m)=${casInstable.facteurSecurite.toFixed(2)} (stable=${casInstable.stable})`,
+      tolerance: '1e-3 m sur Hc, comparaisons strictes sur stable',
+      ecartAbsolu: ecartHc,
+      ecartPourcentage: 0,
+      succes,
+      message: succes
+        ? 'Hauteur critique correcte, cas stable et instable correctement distingués'
+        : 'Écart sur Hc ou mauvaise classification stable/instable',
+    });
+  }
+
+```
+- [ ] **Étape 4.** `npm run test:acceptance` — attendu : `T_BERL.1`, `T_BERL.2` en SUCCÈS, 100% partout.
+- [ ] **Étape 5.** Commit :
+```bash
+git add src/modules/soutenement/berlinoise.ts src/validation/acceptanceTestsSoutenement.ts
+git commit -m "feat(soutenement): stabilité du front non soutenu Berlinoise (T_BERL.2)"
+```
+
+#### Tâche 4 : Résistance du blindage posé
+
+**Fichiers :** Modifier `src/modules/soutenement/berlinoise.ts` ; Test dans `acceptanceTestsSoutenement.ts`
+
+- [ ] **Étape 1.** Ajouter dans `berlinoise.ts` :
+```ts
+export interface ResultatResistanceBlindage {
+  momentDemande: number; // kN.m/m
+  momentResistant: number; // kN.m/m
+  conforme: boolean;
+}
+
+/**
+ * Flexion du madrier une fois posé, poutre simplement appuyée entre deux profilés
+ * (portée = entraxe), sous la pression active Pa au niveau considéré.
+ */
+export function verifierResistanceBlindagePose(
+  pressionActive: number, // kPa
+  entraxeProfiles: number, // m
+  epaisseurBlindage: number, // m
+  contrainteAdmissible: number // kPa
+): ResultatResistanceBlindage {
+  const momentDemande = (pressionActive * entraxeProfiles ** 2) / 8;
+  const momentResistant = (contrainteAdmissible * epaisseurBlindage ** 2) / 6;
+  return { momentDemande, momentResistant, conforme: momentResistant >= momentDemande };
+}
+```
+- [ ] **Étape 2.** `npx tsc --noEmit` — attendu : aucune erreur.
+- [ ] **Étape 3.** Ajouter `T_BERL.3`, import `verifierResistanceBlindagePose` ajouté :
+```ts
+  // --------------------------------------------------------------------------
+  // T_BERL.3 — Résistance du blindage posé, cas conforme et non conforme (§8.5)
+  // --------------------------------------------------------------------------
+  {
+    const pressionActive = 30.0; // kPa
+    const entraxe = 1.2; // m
+    const epaisseur = 0.05; // m
+    const momentDemandeAttendu = (30.0 * 1.2 ** 2) / 8; // 5.4 kNm/m
+
+    const casConforme = verifierResistanceBlindagePose(pressionActive, entraxe, epaisseur, 15000);
+    const casNonConforme = verifierResistanceBlindagePose(pressionActive, entraxe, epaisseur, 8000);
+
+    const ecart = Math.abs(casConforme.momentDemande - momentDemandeAttendu);
+    const succes =
+      ecart < 1e-6 &&
+      casConforme.conforme === true &&
+      casNonConforme.conforme === false &&
+      casConforme.momentDemande === casNonConforme.momentDemande;
+
+    resultats.push({
+      id: 'T_BERL.3',
+      nom: 'Résistance en flexion du blindage posé',
+      phase: 'Surcouche §8.5',
+      description:
+        'Pa=30 kPa, entraxe=1.2 m, epaisseur=5 cm -> moment demandé 5.4 kNm/m. Contrainte admissible 15 MPa -> conforme, 8 MPa -> non conforme.',
+      valeurAttendue: `momentDemande = ${momentDemandeAttendu.toFixed(2)} kNm/m ; conforme(15MPa)=true ; conforme(8MPa)=false`,
+      valeurObtenue: `momentDemande = ${casConforme.momentDemande.toFixed(2)} kNm/m ; conforme(15MPa)=${casConforme.conforme} (resistant=${casConforme.momentResistant.toFixed(2)}) ; conforme(8MPa)=${casNonConforme.conforme} (resistant=${casNonConforme.momentResistant.toFixed(2)})`,
+      tolerance: 'Exact sur le moment demandé, strict sur conforme',
+      ecartAbsolu: ecart,
+      ecartPourcentage: 0,
+      succes,
+      message: succes
+        ? 'Moment demandé correct, classification conforme/non conforme correcte selon la contrainte admissible'
+        : 'Écart sur le moment demandé ou mauvaise classification',
+    });
+  }
+
+```
+- [ ] **Étape 4.** `npm run test:acceptance` — attendu : `T_BERL.1`-`T_BERL.3` en SUCCÈS, 100% partout.
+- [ ] **Étape 5.** Commit :
+```bash
+git add src/modules/soutenement/berlinoise.ts src/validation/acceptanceTestsSoutenement.ts
+git commit -m "feat(soutenement): résistance du blindage posé Berlinoise (T_BERL.3)"
+```
+
+#### Tâche 5 : Fiche réduite + garde-fou local
+
+**Fichiers :** Modifier `src/modules/soutenement/berlinoise.ts` ; Test dans `acceptanceTestsSoutenement.ts`
+
+- [ ] **Étape 1.** Ajouter dans `berlinoise.ts` :
+```ts
+export interface NoeudFicheBerlinoise {
+  cote: number;
+  demandeMobiliseeParM: number; // kN/m — |reaction ressort x| au nœud (résultat smeared du solveur)
+  Pp: number; // kPa — borne passive pleine largeur à ce nœud
+  largeurTributaire: number; // m — hauteur d'influence verticale du nœud
+}
+
+export interface ResultatFicheReduite {
+  demandeMax: number; // kN — pire cas sur un profilé isolé
+  capaciteReduiteMax: number; // kN — butée dispo sur la largeur propre du profilé, même nœud
+  conforme: boolean;
+  gardeFouDeclenche: boolean;
+  avertissement?: string;
+}
+
+/**
+ * Vérifie la fiche sur la largeur PROPRE du profilé (pas la largeur tributaire pleine
+ * qu'utilise le solveur Niveau 2 smeared) : sous le fond de fouille, un profilé isolé ne
+ * peut mobiliser la butée que sur sa propre largeur physique, pas sur toute la largeur
+ * qu'occuperait un écran continu.
+ *
+ * Garde-fou local provisoire (PAS une correction du solveur partagé — cf. DEVPLAN, tâche
+ * "Correction définitive du solveur (Cause 2)" toujours en attente) : si le déplacement de
+ * la phase est déraisonnable ET que la butée globale est mobilisée à ~100%, on ne fait pas
+ * confiance au résultat brut du solveur et on force un avertissement explicite.
+ */
+export function verifierFicheProfileReduite(
+  noeudsSousFiche: NoeudFicheBerlinoise[],
+  entraxeProfiles: number,
+  largeurProfile: number,
+  deplacementMaxPhase: number, // m
+  mobilisationButeeMaxPhase: number, // [0..1]
+  hauteurTotaleOuvrage: number // m
+): ResultatFicheReduite {
+  let demandeMax = 0;
+  let capaciteReduiteMax = 0;
+  let pireRatio = 0;
+
+  for (const n of noeudsSousFiche) {
+    const demandeNode = n.demandeMobiliseeParM * entraxeProfiles; // kN
+    const capaciteNode = n.Pp * largeurProfile * n.largeurTributaire; // kN
+    const ratio = capaciteNode > 1e-6 ? demandeNode / capaciteNode : demandeNode > 1e-6 ? Infinity : 0;
+    if (ratio > pireRatio) {
+      pireRatio = ratio;
+      demandeMax = demandeNode;
+      capaciteReduiteMax = capaciteNode;
+    }
+  }
+
+  const conformeBrut = pireRatio <= 1.0;
+
+  const seuilDeplacementDeraisonnable = Math.max(1.0, hauteurTotaleOuvrage / 10);
+  const gardeFouDeclenche =
+    deplacementMaxPhase > seuilDeplacementDeraisonnable && mobilisationButeeMaxPhase >= 0.999;
+
+  return {
+    demandeMax,
+    capaciteReduiteMax,
+    conforme: gardeFouDeclenche ? false : conformeBrut,
+    gardeFouDeclenche,
+    avertissement: gardeFouDeclenche
+      ? `Résultat potentiellement non convergé (déplacement=${(deplacementMaxPhase * 1000).toFixed(0)} mm, butée mobilisée à 100%) — capacité passive possiblement insuffisante sur la largeur réduite du profilé. Voir DEVPLAN, tâche "Correction définitive du solveur (Cause 2)". Vérifier manuellement avant tout usage.`
+      : undefined,
+  };
+}
+```
+- [ ] **Étape 2.** `npx tsc --noEmit` — attendu : aucune erreur.
+- [ ] **Étape 3.** Ajouter `T_BERL.4`, import `verifierFicheProfileReduite` ajouté :
+```ts
+  // --------------------------------------------------------------------------
+  // T_BERL.4 — Fiche réduite : conforme, non conforme, garde-fou déclenché (§8.5)
+  // --------------------------------------------------------------------------
+  {
+    const entraxe = 1.2; // m
+    const largeurProfile = 0.3; // m
+
+    // Cas A : conforme (Pp élevé -> capacité réduite suffisante)
+    const noeudsConforme = [
+      { cote: 90.0, demandeMobiliseeParM: 50.0, Pp: 800.0, largeurTributaire: 0.5 },
+    ];
+    const casConforme = verifierFicheProfileReduite(
+      noeudsConforme, entraxe, largeurProfile, 0.01, 0.6, 10.0
+    );
+
+    // Cas B : non conforme, mais garde-fou NON déclenché (déplacement raisonnable)
+    const noeudsNonConforme = [
+      { cote: 90.0, demandeMobiliseeParM: 50.0, Pp: 200.0, largeurTributaire: 0.5 },
+    ];
+    const casNonConforme = verifierFicheProfileReduite(
+      noeudsNonConforme, entraxe, largeurProfile, 0.01, 0.85, 10.0
+    );
+
+    // Cas C : garde-fou déclenché (déplacement déraisonnable + butée à 100%, comme le bug
+    // réel documenté au DEVPLAN — Phase 3 du projet d'exemple)
+    const casGardeFou = verifierFicheProfileReduite(
+      noeudsConforme, entraxe, largeurProfile, 50.0, 1.0, 10.0
+    );
+
+    const succes =
+      casConforme.conforme === true &&
+      casConforme.gardeFouDeclenche === false &&
+      casNonConforme.conforme === false &&
+      casNonConforme.gardeFouDeclenche === false &&
+      casGardeFou.gardeFouDeclenche === true &&
+      casGardeFou.conforme === false &&
+      typeof casGardeFou.avertissement === 'string' &&
+      casGardeFou.avertissement.length > 0;
+
+    resultats.push({
+      id: 'T_BERL.4',
+      nom: 'Fiche réduite sur largeur propre du profilé + garde-fou local',
+      phase: 'Surcouche §8.5',
+      description:
+        'Cas A (Pp=800 kPa) conforme sans garde-fou ; Cas B (Pp=200 kPa) non conforme sans garde-fou ; Cas C (déplacement=50m, butée=100%) garde-fou déclenché avec avertissement explicite.',
+      valeurAttendue: 'conforme=true/false/false, garde-fou=false/false/true, avertissement non vide en C',
+      valeurObtenue: `A: conforme=${casConforme.conforme}, garde-fou=${casConforme.gardeFouDeclenche} | B: conforme=${casNonConforme.conforme}, garde-fou=${casNonConforme.gardeFouDeclenche} | C: conforme=${casGardeFou.conforme}, garde-fou=${casGardeFou.gardeFouDeclenche}`,
+      tolerance: 'Comparaisons strictes (booléens)',
+      ecartAbsolu: 0,
+      ecartPourcentage: 0,
+      succes,
+      message: succes
+        ? 'Fiche réduite correctement évaluée sur les 3 cas, garde-fou local opérationnel et non silencieux'
+        : 'Classification incorrecte sur au moins un des 3 cas (conforme / garde-fou / avertissement)',
+    });
+  }
+
+```
+- [ ] **Étape 4.** `npm run test:acceptance` — attendu : `T_BERL.1`-`T_BERL.4` en SUCCÈS, 100% partout (34/34 au total, en partant de 30/30 constatés dans le DEVPLAN).
+- [ ] **Étape 5.** Commit :
+```bash
+git add src/modules/soutenement/berlinoise.ts src/validation/acceptanceTestsSoutenement.ts
+git commit -m "feat(soutenement): fiche réduite + garde-fou local Berlinoise (T_BERL.4)"
+```
+
+#### Tâche 6 : Orchestrateur
+
+**Fichiers :** Modifier `src/modules/soutenement/berlinoise.ts`
+
+Pas de nouveau test normatif dédié : pure composition des 4 fonctions déjà testées
+individuellement (cf. décision de la spec, point 4 — "pas dupliquer la couverture normative").
+
+- [ ] **Étape 1.** Ajouter dans `berlinoise.ts` :
+```ts
+export interface ResultatSurcoucheBerlinoisePhase {
+  phase: PhaseParoi;
+  repartition: ResultatRepartitionProfileBlindage;
+  stabiliteFront: ResultatStabiliteFrontNonSoutenu;
+  resistanceBlindage: ResultatResistanceBlindage;
+  ficheReduite: ResultatFicheReduite;
+}
+
+/**
+ * Orchestrateur : calcule les 4 vérifications §8.5 pour chaque phase à partir des résultats
+ * déjà produits par calculerParoiPhasee (Niveau 2). Ne recalcule jamais le moteur partagé.
+ */
+export function calculerSurcoucheBerlinoise(
+  resultat: ResultatCalculParoiPhasee,
+  parametres: ParametresProfileBerlinoise,
+  couches: CoucheGeotechnique[],
+  configurationNormative: ConfigurationNormative,
+  hauteurTotaleOuvrage: number
+): ResultatSurcoucheBerlinoisePhase[] {
+  return resultat.phases.map((resultatPhase) => {
+    const repartition = calculerRepartitionProfileBlindage(
+      resultatPhase.momentMaxAbsolu,
+      parametres.entraxeProfiles
+    );
+
+    const coteFondFouille = resultatPhase.phase.coteFondFouille;
+    const coucheFront = trouverCoucheACote(couches, coteFondFouille - 0.1) || couches[0];
+    const stabiliteFront = verifierStabiliteFrontNonSoutenu(
+      coucheFront.resistanceNonDrainee.cuTete.v,
+      configurationNormative.facteursSol.M2.gamma_cu,
+      coucheFront.poidsVolumiques.gammaHumide.v,
+      parametres.blindage.hauteurPasse
+    );
+
+    const ptFront = resultatPhase.profilPressionLimite
+      .filter((p) => p.cote <= coteFondFouille + 1e-4)
+      .sort((a, b) => b.cote - a.cote)[0];
+    const resistanceBlindage = verifierResistanceBlindagePose(
+      ptFront?.Pa ?? 0,
+      parametres.entraxeProfiles,
+      parametres.blindage.epaisseur,
+      parametres.blindage.contrainteAdmissible
+    );
+
+    const noeudsSousFiche: NoeudFicheBerlinoise[] = [];
+    for (let i = 0; i < resultat.cotes.length; i++) {
+      const cote = resultat.cotes[i];
+      if (cote > coteFondFouille - 1e-4) continue;
+      const pt = resultatPhase.profilPressionLimite.find((p) => Math.abs(p.cote - cote) < 1e-3);
+      const reactionRessort = resultatPhase.resultatSolveur.reactionsRessorts.find(
+        (r) => r.noeudIndex === i && r.direction === 'x'
+      );
+      noeudsSousFiche.push({
+        cote,
+        demandeMobiliseeParM: Math.abs(reactionRessort?.reaction ?? 0),
+        Pp: pt?.Pp ?? 0,
+        largeurTributaire: resultat.largeursTributaires[i],
+      });
+    }
+    const ficheReduite = verifierFicheProfileReduite(
+      noeudsSousFiche,
+      parametres.entraxeProfiles,
+      parametres.profile.largeur,
+      resultatPhase.deplacementMaxAbsolu,
+      resultatPhase.mobilisationButeeMax,
+      hauteurTotaleOuvrage
+    );
+
+    return { phase: resultatPhase.phase, repartition, stabiliteFront, resistanceBlindage, ficheReduite };
+  });
+}
+```
+- [ ] **Étape 2.** `npx tsc --noEmit` — attendu : aucune erreur.
+- [ ] **Étape 3.** `npm run test:acceptance` — attendu : toujours `T_BERL.1`-`T_BERL.4` en SUCCÈS, 100% partout (l'orchestrateur n'est pas testé isolément, mais ne doit rien casser).
+- [ ] **Étape 4.** Commit :
+```bash
+git add src/modules/soutenement/berlinoise.ts
+git commit -m "feat(soutenement): orchestrateur de la surcouche Berlinoise"
+```
+
+#### Tâche 7 : UI (`OngletParoiPhasee.tsx`)
+
+**Fichiers :** Modifier `src/components/soutenement/OngletParoiPhasee.tsx`
+
+- [ ] **Étape 1.** Imports. Ajouter à l'import existant de `../../modules/soutenement/paroiPhasee` rien de nouveau ; ajouter un nouvel import juste en dessous (après la ligne 14 `} from '../../modules/soutenement/paroiPhasee';`) :
+```ts
+import {
+  calculerSurcoucheBerlinoise,
+  ParametresProfileBerlinoise,
+  ResultatSurcoucheBerlinoisePhase,
+} from '../../modules/soutenement/berlinoise';
+```
+- [ ] **Étape 2.** État. Juste après la déclaration de `epaisseur`/`setEpaisseur` (ligne 61-63), ajouter :
+```ts
+  const [sousType, setSousType] = useState<'continue' | 'berlinoise'>(
+    soutenementExistant?.sousType === 'berlinoise' ? 'berlinoise' : 'continue'
+  );
+  const [entraxeProfiles, setEntraxeProfiles] = useState<number>(
+    soutenementExistant?.parametresBerlinoise?.entraxeProfiles ?? 1.2
+  );
+  const [profileI, setProfileI] = useState<number>(
+    soutenementExistant?.parametresBerlinoise?.profile.I ?? 0.0003
+  ); // m⁴, ex HEB 300 ~ 2.5e-4 m⁴
+  const [profileW, setProfileW] = useState<number>(
+    soutenementExistant?.parametresBerlinoise?.profile.W ?? 0.0017
+  ); // m³
+  const [profileLargeur, setProfileLargeur] = useState<number>(
+    soutenementExistant?.parametresBerlinoise?.profile.largeur ?? 0.3
+  ); // m
+  const [blindageHauteurPasse, setBlindageHauteurPasse] = useState<number>(
+    soutenementExistant?.parametresBerlinoise?.blindage.hauteurPasse ?? 1.0
+  ); // m
+  const [blindageEpaisseur, setBlindageEpaisseur] = useState<number>(
+    soutenementExistant?.parametresBerlinoise?.blindage.epaisseur ?? 0.05
+  ); // m
+  const [blindageContrainteAdm, setBlindageContrainteAdm] = useState<number>(
+    soutenementExistant?.parametresBerlinoise?.blindage.contrainteAdmissible ?? 10000
+  ); // kPa
+```
+- [ ] **Étape 3.** Calcul de rigidité smeared. La paroi Berlinoise n'est pas une dalle béton continue : `E_kPa`/`I_m4`/`A_m2` (lignes 132-134) doivent, en mode `berlinoise`, être dérivés du profilé isolé réparti sur l'entraxe, pas de `epaisseur`. Remplacer les lignes 131-134 :
+```ts
+  // Inertie et section calculées par mètre linéaire
+  const E_kPa = moduleE_GPa * 1e6; // kPa
+  const I_m4 = (1.0 * Math.pow(epaisseur, 3)) / 12; // m4/m
+  const A_m2 = 1.0 * epaisseur; // m2/m
+```
+par :
+```ts
+  // Inertie et section calculées par mètre linéaire.
+  // Berlinoise : rigidité "lissée" = rigidité du profilé isolé répartie sur son entraxe
+  // (le solveur Niveau 2 travaille par mètre linéaire de paroi, pas par profilé).
+  const E_kPa = sousType === 'berlinoise' ? 210.0e6 : moduleE_GPa * 1e6; // 210 GPa acier
+  const I_m4 = sousType === 'berlinoise' ? profileI / entraxeProfiles : (1.0 * Math.pow(epaisseur, 3)) / 12;
+  const A_m2 = sousType === 'berlinoise' ? profileLargeur / entraxeProfiles : 1.0 * epaisseur;
+```
+- [ ] **Étape 4.** Ajouter `entraxeProfiles`, `profileI` aux dépendances du `useMemo` de `resultatCalcul` (lignes 159-172) — insérer après `A_m2,` :
+```ts
+    A_m2,
+    sousType,
+    entraxeProfiles,
+```
+- [ ] **Étape 5.** Calcul de la surcouche. Juste après le bloc `verifRenard` (après la ligne `}, [phaseCourante, coteBase, modele.hydrogeologie, modele.couches]);`), ajouter :
+```ts
+
+  // Surcouche Berlinoise (§8.5) : répartition profilé/blindage, stabilité front non soutenu,
+  // résistance blindage posé, fiche réduite + garde-fou local (cf. DEVPLAN)
+  const surcoucheBerlinoise: ResultatSurcoucheBerlinoisePhase[] | null = useMemo(() => {
+    if (sousType !== 'berlinoise' || !resultatCalcul) return null;
+    const parametres: ParametresProfileBerlinoise = {
+      entraxeProfiles,
+      profile: { I: profileI, W: profileW, largeur: profileLargeur },
+      blindage: {
+        hauteurPasse: blindageHauteurPasse,
+        epaisseur: blindageEpaisseur,
+        contrainteAdmissible: blindageContrainteAdm,
+      },
+    };
+    try {
+      return calculerSurcoucheBerlinoise(
+        resultatCalcul,
+        parametres,
+        modele.couches,
+        modele.configurationNormative,
+        coteTete - coteBase
+      );
+    } catch (e) {
+      console.error('Erreur lors du calcul de la surcouche Berlinoise :', e);
+      return null;
+    }
+  }, [
+    sousType,
+    resultatCalcul,
+    entraxeProfiles,
+    profileI,
+    profileW,
+    profileLargeur,
+    blindageHauteurPasse,
+    blindageEpaisseur,
+    blindageContrainteAdm,
+    modele.couches,
+    modele.configurationNormative,
+    coteTete,
+    coteBase,
+  ]);
+
+  const phaseBerlinoiseCourante: ResultatSurcoucheBerlinoisePhase | null =
+    surcoucheBerlinoise && surcoucheBerlinoise.length > 0
+      ? surcoucheBerlinoise[phaseIndexEffectif] ?? null
+      : null;
+```
+- [ ] **Étape 6.** `npx tsc --noEmit` — attendu : aucune erreur.
+- [ ] **Étape 7.** Sélecteur de sous-type. Dans le panneau "1. Propriétés de la Paroi" (juste après le titre `<h3>`, ligne 686, avant le premier `<div>` de saisie de cote tête), insérer :
+```tsx
+          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
+            <button
+              type="button"
+              onClick={() => setSousType('continue')}
+              className={`px-2.5 py-1 rounded-md transition ${
+                sousType === 'continue'
+                  ? 'bg-white text-slate-900 font-bold shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Paroi continue
+            </button>
+            <button
+              type="button"
+              onClick={() => setSousType('berlinoise')}
+              className={`px-2.5 py-1 rounded-md transition ${
+                sousType === 'berlinoise'
+                  ? 'bg-white text-amber-900 font-bold shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Berlinoise
+            </button>
+          </div>
+```
+- [ ] **Étape 8.** Champs de saisie Berlinoise. Juste après le `</div>` qui ferme le bloc "Épaisseur/Module E" (ligne 735, avant le `<div className="p-2.5 bg-slate-50...">` récapitulatif ligne 737), insérer, conditionné :
+```tsx
+          {sousType === 'berlinoise' && (
+            <div className="p-2.5 bg-amber-50/60 border border-amber-200 rounded-lg space-y-2">
+              <div className="text-[11px] font-bold text-amber-900 uppercase tracking-wider">
+                Profilés & Blindage
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-500 mb-1">Entraxe profilés (m)</label>
+                  <input
+                    type="number" step="0.1" min="0.5" max="4.0"
+                    value={entraxeProfiles}
+                    onChange={(e) => setEntraxeProfiles(parseFloat(e.target.value) || 1.2)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">Largeur profilé (m)</label>
+                  <input
+                    type="number" step="0.05" min="0.1" max="1.0"
+                    value={profileLargeur}
+                    onChange={(e) => setProfileLargeur(parseFloat(e.target.value) || 0.3)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">I profilé (m⁴)</label>
+                  <input
+                    type="number" step="0.00001" min="0.00001"
+                    value={profileI}
+                    onChange={(e) => setProfileI(parseFloat(e.target.value) || 0.0003)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">W profilé (m³)</label>
+                  <input
+                    type="number" step="0.0001" min="0.0001"
+                    value={profileW}
+                    onChange={(e) => setProfileW(parseFloat(e.target.value) || 0.0017)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">Hauteur passe (m)</label>
+                  <input
+                    type="number" step="0.1" min="0.2" max="3.0"
+                    value={blindageHauteurPasse}
+                    onChange={(e) => setBlindageHauteurPasse(parseFloat(e.target.value) || 1.0)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">Épais. blindage (m)</label>
+                  <input
+                    type="number" step="0.01" min="0.02" max="0.2"
+                    value={blindageEpaisseur}
+                    onChange={(e) => setBlindageEpaisseur(parseFloat(e.target.value) || 0.05)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-slate-500 mb-1">Contrainte admissible blindage (kPa)</label>
+                  <input
+                    type="number" step="500" min="1000"
+                    value={blindageContrainteAdm}
+                    onChange={(e) => setBlindageContrainteAdm(parseFloat(e.target.value) || 10000)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+```
+- [ ] **Étape 9.** Carte de résultats. Dans la grille de métriques (`{resultatCalcul && phaseCourante && (` ligne 386), juste avant la fermeture `</div>` qui suit le bloc `verifRenard` (ligne 500-501), ajouter :
+```tsx
+          {/* Surcouche Berlinoise (§8.5) */}
+          {phaseBerlinoiseCourante && (
+            <div
+              className={`p-3 border rounded-xl shadow-xs ${
+                phaseBerlinoiseCourante.ficheReduite.gardeFouDeclenche
+                  ? 'bg-rose-50/70 border-rose-200 text-rose-950'
+                  : phaseBerlinoiseCourante.ficheReduite.conforme &&
+                    phaseBerlinoiseCourante.stabiliteFront.stable &&
+                    phaseBerlinoiseCourante.resistanceBlindage.conforme
+                  ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                  : 'bg-amber-50/70 border-amber-200 text-amber-950'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-wider">
+                  Surcouche Berlinoise
+                </span>
+                {phaseBerlinoiseCourante.ficheReduite.gardeFouDeclenche ? (
+                  <ShieldAlert className="w-4 h-4 text-rose-600" />
+                ) : (
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                )}
+              </div>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-xl font-black">
+                  {phaseBerlinoiseCourante.repartition.momentProfile.toFixed(1)}
+                </span>
+                <span className="text-xs font-semibold">kNm / profilé</span>
+              </div>
+              <div className="mt-1 text-[10px] font-medium space-y-0.5">
+                <div>
+                  Front non soutenu : FS = {phaseBerlinoiseCourante.stabiliteFront.facteurSecurite.toFixed(2)}
+                  {phaseBerlinoiseCourante.stabiliteFront.stable ? ' OK' : ' Risque'}
+                </div>
+                <div>
+                  Blindage posé : {phaseBerlinoiseCourante.resistanceBlindage.conforme ? 'OK' : 'Non conforme'}
+                  {' '}({phaseBerlinoiseCourante.resistanceBlindage.momentDemande.toFixed(1)} / {phaseBerlinoiseCourante.resistanceBlindage.momentResistant.toFixed(1)} kNm/m)
+                </div>
+                <div>
+                  Fiche réduite : {phaseBerlinoiseCourante.ficheReduite.conforme ? 'OK' : 'Non conforme'}
+                </div>
+                {phaseBerlinoiseCourante.ficheReduite.avertissement && (
+                  <div className="text-rose-700 font-bold">
+                    ⚠ {phaseBerlinoiseCourante.ficheReduite.avertissement}
+                  </div>
+                )}
+                <div className="italic opacity-70">
+                  Répartition sans effet de voûte — hypothèse conservatrice, à affiner.
+                </div>
+              </div>
+            </div>
+          )}
+```
+- [ ] **Étape 10.** `npx tsc --noEmit` — attendu : aucune erreur.
+- [ ] **Étape 11.** `npm run build` — attendu : build sans erreur.
+- [ ] **Étape 12.** `npm run test:acceptance` — attendu : toujours 34/34 (aucun test ne touche l'UI, non-régression attendue).
+- [ ] **Étape 13.** Vérification manuelle dans un navigateur (`npm run dev`) : ouvrir l'onglet Paroi Phasée, basculer sur "Berlinoise", vérifier que les champs supplémentaires apparaissent, que la carte de résultats s'affiche et se met à jour avec les entrées, et que la répartition profilé/blindage est cohérente avec le moment global affiché par ailleurs (`momentProfile ≈ momentMax × entraxe`). Confirmer qu'aucune régression visuelle n'apparaît en mode "Paroi continue" (comportement identique à avant).
+- [ ] **Étape 14.** Commit :
+```bash
+git add src/components/soutenement/OngletParoiPhasee.tsx
+git commit -m "feat(soutenement): UI de la surcouche Berlinoise dans l'onglet Paroi Phasée"
+```
+
+#### Tâche 8 : Revue (audit)
+
+- [ ] Relire `berlinoise.ts` en entier contre la spec (§8.5 CDC + décisions actées) : les 3
+      vérifications sont-elles bien présentes, l'hypothèse "pas de voûte" est-elle bien
+      signalée partout où elle s'applique, le garde-fou est-il bien local (pas de
+      modification de `solveurPoutreRessorts.ts`) ?
+- [ ] Relire les 4 tests `T_BERL.*` : les fixtures sont-elles vraiment indépendantes d'un run
+      du solveur complet (donc rapides et non fragiles) ? Les cas limites (garde-fou,
+      non-conforme) sont-ils couverts sans ambiguïté ?
+- [ ] Vérifier qu'aucun des fichiers listés en "Ne pas toucher" dans la spec n'a été modifié :
+      `git diff main -- src/core/solveurPoutreRessorts.ts src/modules/soutenement/paroiPhasee.ts src/modules/soutenement/pousseeButee.ts src/modules/soutenement/murEnL.ts` doit être vide.
+- [ ] Documenter la revue dans `DEVPLAN.md` (nouvelle section `## Revue — Surcouche Berlinoise
+      (2026-09-21)`), avec le même niveau de rigueur que les revues précédentes du fichier
+      (accepter tel quel, ou lister les corrections nécessaires).
+
+
 ## Prochaines étapes (selon plan)
 
 1. **Surcouche Berlinoise (§8.5)** — spec ci-dessus, en cours d'implémentation (Claude,
