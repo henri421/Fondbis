@@ -999,7 +999,7 @@ ces briques déjà validées.
 
 **Fichiers :** Modifier `src/types/geotech.ts:217-237` (`interface OuvrageSoutenement`)
 
-- [ ] **Étape 1.** Ajouter les champs suivants à `OuvrageSoutenement`, juste après `EA?: number;` (ligne 236) :
+- [x] **Étape 1.** Ajouter les champs suivants à `OuvrageSoutenement`, juste après `EA?: number;` (ligne 236) :
 ```ts
   // Extension : surcouche Berlinoise (§8.5)
   sousType?: 'continue' | 'berlinoise' | 'pieuxSecants';
@@ -1013,8 +1013,8 @@ ces briques déjà validées.
     };
   };
 ```
-- [ ] **Étape 2.** Vérifier la compilation : `npx tsc --noEmit`. Attendu : aucune erreur (champs optionnels, aucun site d'appel existant cassé).
-- [ ] **Étape 3.** Commit :
+- [x] **Étape 2.** Vérifier la compilation : `npx tsc --noEmit`. Attendu : aucune erreur (champs optionnels, aucun site d'appel existant cassé).
+- [x] **Étape 3.** Commit :
 ```bash
 git add src/types/geotech.ts
 git commit -m "feat(soutenement): types pour la surcouche Berlinoise (§8.5)"
@@ -1024,7 +1024,7 @@ git commit -m "feat(soutenement): types pour la surcouche Berlinoise (§8.5)"
 
 **Fichiers :** Créer `src/modules/soutenement/berlinoise.ts` ; Test dans `src/validation/acceptanceTestsSoutenement.ts`
 
-- [ ] **Étape 1.** Créer `src/modules/soutenement/berlinoise.ts` avec l'en-tête et la première fonction :
+- [x] **Étape 1.** Créer `src/modules/soutenement/berlinoise.ts` avec l'en-tête et la première fonction :
 ```ts
 /**
  * Surcouche Berlinoise (EN 1997-1 §8.5) — post-traitement des résultats de
@@ -1065,8 +1065,8 @@ export function calculerRepartitionProfileBlindage(
   };
 }
 ```
-- [ ] **Étape 2.** Vérifier que ça compile : `npx tsc --noEmit`. Attendu : aucune erreur.
-- [ ] **Étape 3.** Ajouter le test `T_BERL.1` dans `src/validation/acceptanceTestsSoutenement.ts`. D'abord l'import en haut du fichier (à côté des imports existants) :
+- [x] **Étape 2.** Vérifier que ça compile : `npx tsc --noEmit`. Attendu : aucune erreur.
+- [x] **Étape 3.** Ajouter le test `T_BERL.1` dans `src/validation/acceptanceTestsSoutenement.ts`. D'abord l'import en haut du fichier (à côté des imports existants) :
 ```ts
 import {
   calculerRepartitionProfileBlindage,
@@ -1106,8 +1106,8 @@ Puis, juste avant le `return resultats;` final du fichier, ajouter :
   }
 
 ```
-- [ ] **Étape 4.** Lancer la suite : `npm run test:acceptance`. Attendu : `T_BERL.1` en SUCCÈS, tous les autres tests toujours à 100%.
-- [ ] **Étape 5.** Commit :
+- [x] **Étape 4.** Lancer la suite : `npm run test:acceptance`. Attendu : `T_BERL.1` en SUCCÈS, tous les autres tests toujours à 100%.
+- [x] **Étape 5.** Commit :
 ```bash
 git add src/modules/soutenement/berlinoise.ts src/validation/acceptanceTestsSoutenement.ts
 git commit -m "feat(soutenement): répartition profilé/blindage Berlinoise (T_BERL.1)"
@@ -1117,7 +1117,7 @@ git commit -m "feat(soutenement): répartition profilé/blindage Berlinoise (T_B
 
 **Fichiers :** Modifier `src/modules/soutenement/berlinoise.ts` ; Test dans `acceptanceTestsSoutenement.ts`
 
-- [ ] **Étape 1.** Ajouter dans `berlinoise.ts` :
+- [x] **Étape 1.** Ajouter dans `berlinoise.ts` :
 ```ts
 export interface ResultatStabiliteFrontNonSoutenu {
   hauteurCritique: number; // m, Hc = 4.cu,d / gamma
@@ -1141,8 +1141,8 @@ export function verifierStabiliteFrontNonSoutenu(
   return { hauteurCritique, facteurSecurite, stable: facteurSecurite >= 1.0 };
 }
 ```
-- [ ] **Étape 2.** `npx tsc --noEmit` — attendu : aucune erreur.
-- [ ] **Étape 3.** Ajouter `T_BERL.2` (avant `return resultats;`), import `verifierStabiliteFrontNonSoutenu` ajouté à l'import existant de l'étape précédente :
+- [x] **Étape 2.** `npx tsc --noEmit` — attendu : aucune erreur.
+- [x] **Étape 3.** Ajouter `T_BERL.2` (avant `return resultats;`), import `verifierStabiliteFrontNonSoutenu` ajouté à l'import existant de l'étape précédente :
 ```ts
   // --------------------------------------------------------------------------
   // T_BERL.2 — Stabilité du front non soutenu, cas stable et instable (§8.5)
@@ -1183,8 +1183,8 @@ export function verifierStabiliteFrontNonSoutenu(
   }
 
 ```
-- [ ] **Étape 4.** `npm run test:acceptance` — attendu : `T_BERL.1`, `T_BERL.2` en SUCCÈS, 100% partout.
-- [ ] **Étape 5.** Commit :
+- [x] **Étape 4.** `npm run test:acceptance` — attendu : `T_BERL.1`, `T_BERL.2` en SUCCÈS, 100% partout.
+- [x] **Étape 5.** Commit :
 ```bash
 git add src/modules/soutenement/berlinoise.ts src/validation/acceptanceTestsSoutenement.ts
 git commit -m "feat(soutenement): stabilité du front non soutenu Berlinoise (T_BERL.2)"
@@ -1194,7 +1194,7 @@ git commit -m "feat(soutenement): stabilité du front non soutenu Berlinoise (T_
 
 **Fichiers :** Modifier `src/modules/soutenement/berlinoise.ts` ; Test dans `acceptanceTestsSoutenement.ts`
 
-- [ ] **Étape 1.** Ajouter dans `berlinoise.ts` :
+- [x] **Étape 1.** Ajouter dans `berlinoise.ts` :
 ```ts
 export interface ResultatResistanceBlindage {
   momentDemande: number; // kN.m/m
@@ -1217,8 +1217,8 @@ export function verifierResistanceBlindagePose(
   return { momentDemande, momentResistant, conforme: momentResistant >= momentDemande };
 }
 ```
-- [ ] **Étape 2.** `npx tsc --noEmit` — attendu : aucune erreur.
-- [ ] **Étape 3.** Ajouter `T_BERL.3`, import `verifierResistanceBlindagePose` ajouté :
+- [x] **Étape 2.** `npx tsc --noEmit` — attendu : aucune erreur.
+- [x] **Étape 3.** Ajouter `T_BERL.3`, import `verifierResistanceBlindagePose` ajouté :
 ```ts
   // --------------------------------------------------------------------------
   // T_BERL.3 — Résistance du blindage posé, cas conforme et non conforme (§8.5)
@@ -1258,8 +1258,8 @@ export function verifierResistanceBlindagePose(
   }
 
 ```
-- [ ] **Étape 4.** `npm run test:acceptance` — attendu : `T_BERL.1`-`T_BERL.3` en SUCCÈS, 100% partout.
-- [ ] **Étape 5.** Commit :
+- [x] **Étape 4.** `npm run test:acceptance` — attendu : `T_BERL.1`-`T_BERL.3` en SUCCÈS, 100% partout.
+- [x] **Étape 5.** Commit :
 ```bash
 git add src/modules/soutenement/berlinoise.ts src/validation/acceptanceTestsSoutenement.ts
 git commit -m "feat(soutenement): résistance du blindage posé Berlinoise (T_BERL.3)"
@@ -1269,7 +1269,7 @@ git commit -m "feat(soutenement): résistance du blindage posé Berlinoise (T_BE
 
 **Fichiers :** Modifier `src/modules/soutenement/berlinoise.ts` ; Test dans `acceptanceTestsSoutenement.ts`
 
-- [ ] **Étape 1.** Ajouter dans `berlinoise.ts` :
+- [x] **Étape 1.** Ajouter dans `berlinoise.ts` :
 ```ts
 export interface NoeudFicheBerlinoise {
   cote: number;
@@ -1337,8 +1337,8 @@ export function verifierFicheProfileReduite(
   };
 }
 ```
-- [ ] **Étape 2.** `npx tsc --noEmit` — attendu : aucune erreur.
-- [ ] **Étape 3.** Ajouter `T_BERL.4`, import `verifierFicheProfileReduite` ajouté :
+- [x] **Étape 2.** `npx tsc --noEmit` — attendu : aucune erreur.
+- [x] **Étape 3.** Ajouter `T_BERL.4`, import `verifierFicheProfileReduite` ajouté :
 ```ts
   // --------------------------------------------------------------------------
   // T_BERL.4 — Fiche réduite : conforme, non conforme, garde-fou déclenché (§8.5)
@@ -1398,8 +1398,8 @@ export function verifierFicheProfileReduite(
   }
 
 ```
-- [ ] **Étape 4.** `npm run test:acceptance` — attendu : `T_BERL.1`-`T_BERL.4` en SUCCÈS, 100% partout (34/34 au total, en partant de 30/30 constatés dans le DEVPLAN).
-- [ ] **Étape 5.** Commit :
+- [x] **Étape 4.** `npm run test:acceptance` — attendu : `T_BERL.1`-`T_BERL.4` en SUCCÈS, 100% partout (34/34 au total, en partant de 30/30 constatés dans le DEVPLAN).
+- [x] **Étape 5.** Commit :
 ```bash
 git add src/modules/soutenement/berlinoise.ts src/validation/acceptanceTestsSoutenement.ts
 git commit -m "feat(soutenement): fiche réduite + garde-fou local Berlinoise (T_BERL.4)"
@@ -1412,7 +1412,7 @@ git commit -m "feat(soutenement): fiche réduite + garde-fou local Berlinoise (T
 Pas de nouveau test normatif dédié : pure composition des 4 fonctions déjà testées
 individuellement (cf. décision de la spec, point 4 — "pas dupliquer la couverture normative").
 
-- [ ] **Étape 1.** Ajouter dans `berlinoise.ts` :
+- [x] **Étape 1.** Ajouter dans `berlinoise.ts` :
 ```ts
 export interface ResultatSurcoucheBerlinoisePhase {
   phase: PhaseParoi;
@@ -1486,9 +1486,9 @@ export function calculerSurcoucheBerlinoise(
   });
 }
 ```
-- [ ] **Étape 2.** `npx tsc --noEmit` — attendu : aucune erreur.
-- [ ] **Étape 3.** `npm run test:acceptance` — attendu : toujours `T_BERL.1`-`T_BERL.4` en SUCCÈS, 100% partout (l'orchestrateur n'est pas testé isolément, mais ne doit rien casser).
-- [ ] **Étape 4.** Commit :
+- [x] **Étape 2.** `npx tsc --noEmit` — attendu : aucune erreur.
+- [x] **Étape 3.** `npm run test:acceptance` — attendu : toujours `T_BERL.1`-`T_BERL.4` en SUCCÈS, 100% partout (l'orchestrateur n'est pas testé isolément, mais ne doit rien casser).
+- [x] **Étape 4.** Commit :
 ```bash
 git add src/modules/soutenement/berlinoise.ts
 git commit -m "feat(soutenement): orchestrateur de la surcouche Berlinoise"
@@ -1498,7 +1498,7 @@ git commit -m "feat(soutenement): orchestrateur de la surcouche Berlinoise"
 
 **Fichiers :** Modifier `src/components/soutenement/OngletParoiPhasee.tsx`
 
-- [ ] **Étape 1.** Imports. Ajouter à l'import existant de `../../modules/soutenement/paroiPhasee` rien de nouveau ; ajouter un nouvel import juste en dessous (après la ligne 14 `} from '../../modules/soutenement/paroiPhasee';`) :
+- [x] **Étape 1.** Imports. Ajouter à l'import existant de `../../modules/soutenement/paroiPhasee` rien de nouveau ; ajouter un nouvel import juste en dessous (après la ligne 14 `} from '../../modules/soutenement/paroiPhasee';`) :
 ```ts
 import {
   calculerSurcoucheBerlinoise,
@@ -1506,7 +1506,7 @@ import {
   ResultatSurcoucheBerlinoisePhase,
 } from '../../modules/soutenement/berlinoise';
 ```
-- [ ] **Étape 2.** État. Juste après la déclaration de `epaisseur`/`setEpaisseur` (ligne 61-63), ajouter :
+- [x] **Étape 2.** État. Juste après la déclaration de `epaisseur`/`setEpaisseur` (ligne 61-63), ajouter :
 ```ts
   const [sousType, setSousType] = useState<'continue' | 'berlinoise'>(
     soutenementExistant?.sousType === 'berlinoise' ? 'berlinoise' : 'continue'
@@ -1533,7 +1533,7 @@ import {
     soutenementExistant?.parametresBerlinoise?.blindage.contrainteAdmissible ?? 10000
   ); // kPa
 ```
-- [ ] **Étape 3.** Calcul de rigidité smeared. La paroi Berlinoise n'est pas une dalle béton continue : `E_kPa`/`I_m4`/`A_m2` (lignes 132-134) doivent, en mode `berlinoise`, être dérivés du profilé isolé réparti sur l'entraxe, pas de `epaisseur`. Remplacer les lignes 131-134 :
+- [x] **Étape 3.** Calcul de rigidité smeared. La paroi Berlinoise n'est pas une dalle béton continue : `E_kPa`/`I_m4`/`A_m2` (lignes 132-134) doivent, en mode `berlinoise`, être dérivés du profilé isolé réparti sur l'entraxe, pas de `epaisseur`. Remplacer les lignes 131-134 :
 ```ts
   // Inertie et section calculées par mètre linéaire
   const E_kPa = moduleE_GPa * 1e6; // kPa
@@ -1549,13 +1549,13 @@ par :
   const I_m4 = sousType === 'berlinoise' ? profileI / entraxeProfiles : (1.0 * Math.pow(epaisseur, 3)) / 12;
   const A_m2 = sousType === 'berlinoise' ? profileLargeur / entraxeProfiles : 1.0 * epaisseur;
 ```
-- [ ] **Étape 4.** Ajouter `entraxeProfiles`, `profileI` aux dépendances du `useMemo` de `resultatCalcul` (lignes 159-172) — insérer après `A_m2,` :
+- [x] **Étape 4.** Ajouter `entraxeProfiles`, `profileI` aux dépendances du `useMemo` de `resultatCalcul` (lignes 159-172) — insérer après `A_m2,` :
 ```ts
     A_m2,
     sousType,
     entraxeProfiles,
 ```
-- [ ] **Étape 5.** Calcul de la surcouche. Juste après le bloc `verifRenard` (après la ligne `}, [phaseCourante, coteBase, modele.hydrogeologie, modele.couches]);`), ajouter :
+- [x] **Étape 5.** Calcul de la surcouche. Juste après le bloc `verifRenard` (après la ligne `}, [phaseCourante, coteBase, modele.hydrogeologie, modele.couches]);`), ajouter :
 ```ts
 
   // Surcouche Berlinoise (§8.5) : répartition profilé/blindage, stabilité front non soutenu,
@@ -1604,8 +1604,8 @@ par :
       ? surcoucheBerlinoise[phaseIndexEffectif] ?? null
       : null;
 ```
-- [ ] **Étape 6.** `npx tsc --noEmit` — attendu : aucune erreur.
-- [ ] **Étape 7.** Sélecteur de sous-type. Dans le panneau "1. Propriétés de la Paroi" (juste après le titre `<h3>`, ligne 686, avant le premier `<div>` de saisie de cote tête), insérer :
+- [x] **Étape 6.** `npx tsc --noEmit` — attendu : aucune erreur.
+- [x] **Étape 7.** Sélecteur de sous-type. Dans le panneau "1. Propriétés de la Paroi" (juste après le titre `<h3>`, ligne 686, avant le premier `<div>` de saisie de cote tête), insérer :
 ```tsx
           <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
             <button
@@ -1632,7 +1632,7 @@ par :
             </button>
           </div>
 ```
-- [ ] **Étape 8.** Champs de saisie Berlinoise. Juste après le `</div>` qui ferme le bloc "Épaisseur/Module E" (ligne 735, avant le `<div className="p-2.5 bg-slate-50...">` récapitulatif ligne 737), insérer, conditionné :
+- [x] **Étape 8.** Champs de saisie Berlinoise. Juste après le `</div>` qui ferme le bloc "Épaisseur/Module E" (ligne 735, avant le `<div className="p-2.5 bg-slate-50...">` récapitulatif ligne 737), insérer, conditionné :
 ```tsx
           {sousType === 'berlinoise' && (
             <div className="p-2.5 bg-amber-50/60 border border-amber-200 rounded-lg space-y-2">
@@ -1707,7 +1707,7 @@ par :
             </div>
           )}
 ```
-- [ ] **Étape 9.** Carte de résultats. Dans la grille de métriques (`{resultatCalcul && phaseCourante && (` ligne 386), juste avant la fermeture `</div>` qui suit le bloc `verifRenard` (ligne 500-501), ajouter :
+- [x] **Étape 9.** Carte de résultats. Dans la grille de métriques (`{resultatCalcul && phaseCourante && (` ligne 386), juste avant la fermeture `</div>` qui suit le bloc `verifRenard` (ligne 500-501), ajouter :
 ```tsx
           {/* Surcouche Berlinoise (§8.5) */}
           {phaseBerlinoiseCourante && (
@@ -1762,11 +1762,11 @@ par :
             </div>
           )}
 ```
-- [ ] **Étape 10.** `npx tsc --noEmit` — attendu : aucune erreur.
-- [ ] **Étape 11.** `npm run build` — attendu : build sans erreur.
-- [ ] **Étape 12.** `npm run test:acceptance` — attendu : toujours 34/34 (aucun test ne touche l'UI, non-régression attendue).
+- [x] **Étape 10.** `npx tsc --noEmit` — attendu : aucune erreur.
+- [x] **Étape 11.** `npm run build` — attendu : build sans erreur.
+- [x] **Étape 12.** `npm run test:acceptance` — attendu : toujours 34/34 (aucun test ne touche l'UI, non-régression attendue).
 - [ ] **Étape 13.** Vérification manuelle dans un navigateur (`npm run dev`) : ouvrir l'onglet Paroi Phasée, basculer sur "Berlinoise", vérifier que les champs supplémentaires apparaissent, que la carte de résultats s'affiche et se met à jour avec les entrées, et que la répartition profilé/blindage est cohérente avec le moment global affiché par ailleurs (`momentProfile ≈ momentMax × entraxe`). Confirmer qu'aucune régression visuelle n'apparaît en mode "Paroi continue" (comportement identique à avant).
-- [ ] **Étape 14.** Commit :
+- [x] **Étape 14.** Commit :
 ```bash
 git add src/components/soutenement/OngletParoiPhasee.tsx
 git commit -m "feat(soutenement): UI de la surcouche Berlinoise dans l'onglet Paroi Phasée"
@@ -1774,16 +1774,16 @@ git commit -m "feat(soutenement): UI de la surcouche Berlinoise dans l'onglet Pa
 
 #### Tâche 8 : Revue (audit)
 
-- [ ] Relire `berlinoise.ts` en entier contre la spec (§8.5 CDC + décisions actées) : les 3
+- [x] Relire `berlinoise.ts` en entier contre la spec (§8.5 CDC + décisions actées) : les 3
       vérifications sont-elles bien présentes, l'hypothèse "pas de voûte" est-elle bien
       signalée partout où elle s'applique, le garde-fou est-il bien local (pas de
       modification de `solveurPoutreRessorts.ts`) ?
-- [ ] Relire les 4 tests `T_BERL.*` : les fixtures sont-elles vraiment indépendantes d'un run
+- [x] Relire les 4 tests `T_BERL.*` : les fixtures sont-elles vraiment indépendantes d'un run
       du solveur complet (donc rapides et non fragiles) ? Les cas limites (garde-fou,
       non-conforme) sont-ils couverts sans ambiguïté ?
-- [ ] Vérifier qu'aucun des fichiers listés en "Ne pas toucher" dans la spec n'a été modifié :
+- [x] Vérifier qu'aucun des fichiers listés en "Ne pas toucher" dans la spec n'a été modifié :
       `git diff main -- src/core/solveurPoutreRessorts.ts src/modules/soutenement/paroiPhasee.ts src/modules/soutenement/pousseeButee.ts src/modules/soutenement/murEnL.ts` doit être vide.
-- [ ] Documenter la revue dans `DEVPLAN.md` (nouvelle section `## Revue — Surcouche Berlinoise
+- [x] Documenter la revue dans `DEVPLAN.md` (nouvelle section `## Revue — Surcouche Berlinoise
       (2026-09-21)`), avec le même niveau de rigueur que les revues précédentes du fichier
       (accepter tel quel, ou lister les corrections nécessaires).
 
