@@ -1765,7 +1765,19 @@ par :
 - [x] **Étape 10.** `npx tsc --noEmit` — attendu : aucune erreur.
 - [x] **Étape 11.** `npm run build` — attendu : build sans erreur.
 - [x] **Étape 12.** `npm run test:acceptance` — attendu : toujours 34/34 (aucun test ne touche l'UI, non-régression attendue).
-- [ ] **Étape 13.** Vérification manuelle dans un navigateur (`npm run dev`) : ouvrir l'onglet Paroi Phasée, basculer sur "Berlinoise", vérifier que les champs supplémentaires apparaissent, que la carte de résultats s'affiche et se met à jour avec les entrées, et que la répartition profilé/blindage est cohérente avec le moment global affiché par ailleurs (`momentProfile ≈ momentMax × entraxe`). Confirmer qu'aucune régression visuelle n'apparaît en mode "Paroi continue" (comportement identique à avant).
+- [x] **Étape 13.** Vérification manuelle dans un navigateur (`npm run dev`) : ouvrir l'onglet Paroi Phasée, basculer sur "Berlinoise", vérifier que les champs supplémentaires apparaissent, que la carte de résultats s'affiche et se met à jour avec les entrées, et que la répartition profilé/blindage est cohérente avec le moment global affiché par ailleurs (`momentProfile ≈ momentMax × entraxe`). Confirmer qu'aucune régression visuelle n'apparaît en mode "Paroi continue" (comportement identique à avant).
+  **Fait le 2026-09-21 (Claude)**, réseau du sandbox redevenu disponible pour installer
+  Chromium (`npx playwright install chromium` a réussi cette fois). Vérifié sur le projet
+  d'exemple (Module C, Niveau 2, Phase 1) : bascule "Paroi continue ⇄ Berlinoise" fonctionne,
+  panneau "Profilés & Blindage" apparaît avec les valeurs par défaut attendues (entraxe
+  1.2 m, largeur 0.3 m, I=0.0003 m⁴, W=0.0017 m³, passe 1 m, blindage 5 cm/10000 kPa),
+  récap "Inertie I : 0.00025 m⁴/m" = 0.0003/1.2 exact. Carte "Surcouche Berlinoise" affiche
+  `momentProfile = 23.0 kNm/profilé`, à comparer à `M_MAX = 19.2 kNm/m × entraxe 1.2 m =
+  23.04` — cohérent. Front non soutenu FS=9.77 OK, blindage posé OK (2.6/4.2 kNm/m), fiche
+  réduite correctement signalée "Non conforme" (cohérent avec Mobilisation butée = 100% sur
+  cette phase), disclaimer "hypothèse conservatrice, à affiner" affiché. Bascule retour vers
+  "Paroi continue" sans régression (revérifié sur capture avant bascule). Aucune erreur
+  console. Réserve 1 de la revue ci-dessus : **levée**.
 - [x] **Étape 14.** Commit :
 ```bash
 git add src/components/soutenement/OngletParoiPhasee.tsx
@@ -1842,6 +1854,12 @@ ici est un palliatif local, documenté comme tel dans le code et dans le message
 **Verdict : accepté**, sous réserve de la vérification visuelle (Réserve 1) par Henri à
 l'occasion de la prochaine ouverture de l'app.
 
+**Addendum (2026-09-21, plus tard le même jour, Claude) : Réserve 1 levée.** Le réseau du
+sandbox a fini par permettre l'installation de Chromium ; vérification faite en navigateur,
+voir Étape 13 cochée dans le plan ci-dessus pour le détail. **Réserve 2 reste ouverte**
+(pas de persistance, comportement préexistant hors périmètre). La mention "Cause 2 toujours
+en attente" ci-dessus est également obsolète depuis le merge suivant.
+
 ## Merge avec la correction upstream du solveur (Cause 2) (2026-09-21, Claude)
 
 Au moment de pousser la revue ci-dessus, `git push` a été rejeté : une autre session (très
@@ -1871,9 +1889,10 @@ donc désormais **résolue**, pas seulement contournée localement.
 
 ## Prochaines étapes (selon plan)
 
-1. **Surcouche Berlinoise (§8.5)** — implémentée et revue (voir ci-dessus, 2026-09-21).
-   Reste : vérification visuelle par Henri dans un vrai navigateur (Réserve 1 de la revue),
-   non faite faute d'outillage navigateur dans le sandbox d'implémentation.
+1. **Surcouche Berlinoise (§8.5)** — **close** : implémentée, testée (35/35), revue, vérifiée
+   en navigateur (voir ci-dessus, 2026-09-21). Reste Réserve 2 (pas de persistance
+   `sousType`/`parametresBerlinoise`), non bloquante, comportement préexistant sur tout
+   l'onglet.
 2. **Surcouche pieux sécants (§8.5)** — pas encore spécifiée, à faire après la berlinoise.
    Peut maintenant s'appuyer sur un solveur robuste (Cause 2 résolue, voir merge ci-dessus).
 3. ~~**Correction définitive du solveur (Cause 2)**~~ — **résolue** par `82ce1e6` (upstream)
