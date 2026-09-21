@@ -1887,6 +1887,174 @@ donc désormais **résolue**, pas seulement contournée localement.
 **Vérifié après merge** : `tsc --noEmit` propre, `npm run build` propre,
 `npm run test:acceptance` à **35/35 (100%)** (34 + `T_PHASE.4`).
 
+## Spec + Plan — Persistance de l'onglet Paroi Phasée (Réserve 2) (2026-09-21, Claude)
+
+**Contexte.** Réserve 2 de la revue Berlinoise : `sousType`/`parametresBerlinoise` (et en
+réalité TOUT l'état de `OngletParoiPhasee.tsx` — cote tête/base, épaisseur, module E, état
+ELS/ELU, phases, appuis, kh par couche) ne sont que de l'état React local, jamais réinjectés
+dans `modele.ouvrages.soutenements`. Changer d'onglet ou recharger le projet perd toute la
+saisie. Henri : « il faut de la persistance c'est important ».
+
+**Découverte en creusant (avant d'écrire cette spec) : un second problème latent.**
+`handleUpdateSoutenement` (`App.tsx`) remplace tout le tableau `soutenements` par `[mur]` —
+un seul ouvrage persistable à la fois. Aujourd'hui inoffensif car seul l'onglet Mur en L
+appelle `onUpdateSoutenement`. Si on ajoute la sauvegarde de la Paroi Phasée sans corriger
+ça, éditer l'un écrase l'autre. Pire : `ModalNoteDeCalcul.tsx` (la Note de Calcul imprimable)
+lit `soutenements[0]` et lui applique directement `verifierMurEnLELU` — si une entrée
+`paroiFlexible` finit à l'index 0, la note imprimée calculerait n'importe quoi sur le mauvais
+type d'ouvrage. Décidé avec Henri : corriger aussi ce point (upsert par type).
+
+**Décisions :**
+- Upsert par `type` dans `handleUpdateSoutenement`, pas un remplacement total du tableau.
+- Les 3 lecteurs qui supposaient `soutenements[0]` unique (`App.tsx`, `OngletContraintes.tsx`,
+  `ModalNoteDeCalcul.tsx`) sont corrigés pour préférer explicitement `type === 'murEnL'`,
+  comme le fait déjà `OngletSoutenement.tsx`.
+- Un seul `useEffect` de synchronisation dans `OngletParoiPhasee.tsx` (pas de refonte vers le
+  pattern "tout contrôlé depuis les props" du reste de l'app) : risque de régression minimal
+  sur un fichier de 1900 lignes déjà validé, écrit dans le modèle à chaque changement d'état
+  local pertinent.
+- **Piège d'implémentation à respecter** : le tableau de dépendances de ce `useEffect` NE DOIT
+  PAS inclure `modele`, `soutenementExistant`, ni `onUpdateSoutenement` — `handleUpdateSoutenement`
+  n'est pas mémoïsée (`useCallback`) côté `App.tsx`, donc chaque sauvegarde re-render App avec
+  une nouvelle référence de fonction ; l'inclure dans les deps bouclerait à l'infini (save →
+  re-render → nouvelle réf → save → ...). Seul l'état local (saisies utilisateur) doit
+  déclencher l'effet.
+
+### 1. Types (`src/types/geotech.ts`)
+Ajouter à `OuvrageSoutenement`, à côté de `parametresBerlinoise` :
+```ts
+coteBase?: number;               // m — cote base/fiche de l'écran (paroi phasée uniquement)
+moduleE_GPa?: number;            // GPa — module d'Young (paroi continue)
+etatCalcul?: 'ELS' | 'ELU';
+khParCouche?: Record<string, number>; // kN/m³, clé = CoucheGeotechnique.id
+```
+Champs optionnels, rétrocompatibles.
+
+### 2. `App.tsx` — upsert par type
+Remplacer :
+```ts
+const handleUpdateSoutenement = (mur: OuvrageSoutenement) => {
+  handleUpdateModele({
+    ...modele,
+    ouvrages: { ...modele.ouvrages, soutenements: [mur] },
+  });
+};
+```
+par :
+```ts
+const handleUpdateSoutenement = (ouvrage: OuvrageSoutenement) => {
+  const autres = modele.ouvrages.soutenements.filter((s) => s.type !== ouvrage.type);
+  handleUpdateModele({
+    ...modele,
+    ouvrages: { ...modele.ouvrages, soutenements: [...autres, ouvrage] },
+  });
+};
+```
+Et dans `getOuvrageActifPourCoupe` (ligne ~119), remplacer `modele.ouvrages.soutenements[0]`
+par `modele.ouvrages.soutenements.find((s) => s.type === 'murEnL') ?? modele.ouvrages.soutenements[0]`.
+
+### 3. `OngletContraintes.tsx` — même correction
+```ts
+const soutenementPourCoupe =
+  modele.ouvrages.soutenements.find((s) => s.type === 'murEnL') ?? modele.ouvrages.soutenements[0];
+if (soutenementPourCoupe) {
+  cotesSingulieres.push(soutenementPourCoupe.coteFondFouille);
+}
+```
+
+### 4. `ModalNoteDeCalcul.tsx` — même correction (le point le plus important, note imprimable)
+```ts
+const mur = modele.ouvrages.soutenements.find((s) => s.type === 'murEnL');
+```
+(retirer `?? modele.ouvrages.soutenements[0]` ici précisément : si aucun mur en L n'existe,
+`mur` doit être `undefined` — pas substitué silencieusement par une entrée paroi phasée
+inadaptée à `verifierMurEnLELU`.)
+
+### 5. `OngletParoiPhasee.tsx` — useEffect de synchronisation
+- Import `useEffect` ajouté à la ligne 1.
+- Initialiseur de `coteBase` (ligne 84-88) : préférer `soutenementExistant?.coteBase` si
+  présent, repli sur l'ancienne heuristique (`coteFondFouille - 6.0`) pour les entrées
+  anciennes qui n'ont que `coteFondFouille` (créées avant ce correctif) :
+```ts
+const [coteBase, setCoteBase] = useState<number>(
+  soutenementExistant?.coteBase ??
+    (soutenementExistant?.coteFondFouille
+      ? soutenementExistant.coteFondFouille - 6.0
+      : coteTNReelle - 12.0)
+);
+```
+- Initialiseurs de `moduleE_GPa` et `etatCalcul` (lignes 116-117) : lire depuis
+  `soutenementExistant` :
+```ts
+const [moduleE_GPa, setModuleE_GPa] = useState<number>(soutenementExistant?.moduleE_GPa ?? 30.0);
+const [etatCalcul, setEtatCalcul] = useState<'ELS' | 'ELU'>(soutenementExistant?.etatCalcul ?? 'ELS');
+```
+- Initialiseur de `khParCouche` (ligne 203-218) : si `soutenementExistant?.khParCouche` existe
+  et couvre toutes les couches actuelles, l'utiliser ; sinon repli sur l'heuristique par
+  nature de sol déjà en place (ne pas casser un projet dont les couches ont changé depuis).
+- Nouveau `useEffect`, juste après `phaseBerlinoiseCourante` (après la ligne actuelle
+  `: null;` qui suit sa déclaration) :
+```ts
+  // Synchronisation vers le modèle persisté (IndexedDB via App.tsx). Ne PAS ajouter modele,
+  // soutenementExistant ou onUpdateSoutenement aux dépendances : onUpdateSoutenement n'est
+  // pas mémoïsée côté App.tsx, une nouvelle référence est créée à chaque sauvegarde, ce qui
+  // boucleraite à l'infini si elle déclenchait elle-même cet effet.
+  useEffect(() => {
+    if (!onUpdateSoutenement) return;
+    const ouvrage: OuvrageSoutenement = {
+      id: soutenementExistant?.id ?? 'PAROI-01',
+      nom: soutenementExistant?.nom ?? 'Paroi phasée',
+      type: 'paroiFlexible',
+      hauteurTotale: coteTete - coteBase,
+      coteTete,
+      coteFondFouille: phases[phases.length - 1]?.coteFondFouille ?? coteTete,
+      coteBase,
+      epaisseurVoile: epaisseur,
+      surchargeQ: soutenementExistant?.surchargeQ ?? 0,
+      inclinaisonTerrePlein: soutenementExistant?.inclinaisonTerrePlein ?? 0,
+      frottementDeltaSurPhi: soutenementExistant?.frottementDeltaSurPhi ?? 0.667,
+      butons: [],
+      phases,
+      appuisPhases: appuis,
+      EI: E_kPa * I_m4,
+      EA: E_kPa * A_m2,
+      moduleE_GPa,
+      etatCalcul,
+      khParCouche,
+      sousType,
+      parametresBerlinoise:
+        sousType === 'berlinoise'
+          ? {
+              entraxeProfiles,
+              profile: { I: profileI, W: profileW, largeur: profileLargeur },
+              blindage: {
+                hauteurPasse: blindageHauteurPasse,
+                epaisseur: blindageEpaisseur,
+                contrainteAdmissible: blindageContrainteAdm,
+              },
+            }
+          : undefined,
+    };
+    onUpdateSoutenement(ouvrage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- voir commentaire ci-dessus
+  }, [
+    coteTete, coteBase, epaisseur, moduleE_GPa, etatCalcul, phases, appuis, khParCouche,
+    sousType, entraxeProfiles, profileI, profileW, profileLargeur,
+    blindageHauteurPasse, blindageEpaisseur, blindageContrainteAdm, E_kPa, I_m4, A_m2,
+  ]);
+```
+
+### 6. Vérifications
+- `npx tsc --noEmit` propre.
+- `npm run test:acceptance` : 35/35 inchangé (rien ici ne touche le moteur de calcul).
+- `npm run build` propre.
+- **Vérification manuelle en navigateur** (Chromium maintenant installé dans ce sandbox) :
+  ouvrir Module C, saisir des valeurs sur Mur en L ET sur Paroi Phasée (Berlinoise inclus),
+  changer d'onglet, recharger la page (`location.reload()` ou fermer/rouvrir la session
+  Chromium), et vérifier par `Exporter JSON` ou relecture d'écran que les DEUX ouvrages sont
+  toujours là avec les bonnes valeurs.
+
+
 ## Prochaines étapes (selon plan)
 
 1. **Surcouche Berlinoise (§8.5)** — **close** : implémentée, testée (35/35), revue, vérifiée
