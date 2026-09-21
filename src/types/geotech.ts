@@ -245,6 +245,14 @@ export interface OuvrageSoutenement {
       contrainteAdmissible: number; // kPa
     };
   };
+  // Extension : surcouche Paroi de Pieux Sécants (§8.5)
+  parametresPieuxSecants?: {
+    diametrePrimaire: number;        // m
+    diametreSecondaire: number;      // m
+    entraxe: number;                 // m, axe à axe pieu primaire ↔ secondaire adjacent
+    deviationVerticaliteMax: number; // sans unité (pente), ex 0.01 = 1% — saisie directe
+    recouvrementMinimalRequis: number; // m — seuil d'étanchéité/continuité, saisie directe
+  };
   // Extension : persistance complète de la paroi phasée (Réserve 2, revue Berlinoise)
   coteBase?: number;                    // m — cote base/fiche de l'écran (paroi phasée)
   moduleE_GPa?: number;                 // GPa — module d'Young (paroi continue)
