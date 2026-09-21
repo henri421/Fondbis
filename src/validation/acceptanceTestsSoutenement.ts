@@ -409,5 +409,104 @@ export function executerTestsAcceptationSoutenement(
     });
   }
 
+  // --------------------------------------------------------------------------
+  // T_PHASE.4 — Détection de rupture passive / mécanisme cinématique (§8.4 / §9.3)
+  // --------------------------------------------------------------------------
+  {
+    // Paroi de 12 m avec fiche insuffisante (excavation à 10 m, fiche de 2 m)
+    const coucheSable: CoucheGeotechnique = {
+      id: 'C_PHASE_4_SABLE',
+      nom: 'Sable alluvial frottant modéré',
+      coteToit: 100.0,
+      epaisseur: 15.0,
+      nature: 'sable',
+      couleurAffichage: '#e9c46a',
+      poidsVolumiques: {
+        gammaHumide: { v: 18.0, u: 'kN/m³', statut: 'mesure', source: 'essai' },
+        gammaSature: { v: 20.0, u: 'kN/m³', statut: 'mesure', source: 'essai' },
+      },
+      resistanceDrainee: {
+        phiPrime: { v: 25.0, u: 'deg', statut: 'mesure', source: 'essai' },
+        phiCritique: { v: 25.0, u: 'deg', statut: 'mesure', source: 'essai' },
+        cPrime: { v: 0.0, u: 'kPa', statut: 'mesure', source: 'essai' },
+        psiDilatance: { v: 0.0, u: 'deg', statut: 'mesure', source: 'essai' },
+        deltaInterface: { v: 0.0, u: 'deg', statut: 'mesure', source: 'essai' },
+      },
+      resistanceNonDrainee: {
+        cuTete: { v: 0.0, u: 'kPa', statut: 'mesure', source: 'defaut' },
+        gradientCu: { v: 0.0, u: 'kPa/m', statut: 'mesure', source: 'defaut' },
+      },
+      deformation: {} as any,
+    };
+
+    const hydroSansNappe: Hydrogeologie = {
+      nappePrincipale: {
+        coteCaracteristique: 80.0,
+        coteDefavorableELU: 80.0,
+        regime: 'hydrostatique',
+      },
+      gradientVertical: null,
+      nappesSecondaires: [],
+      poidsVolumiqueEau: 9.81,
+    };
+
+    // Paroi de 12 m de hauteur (cote tête = 100, cote base = 88)
+    // Phase 1 : creusement modéré à 97 m (-3 m)
+    // Phase 2 : pose buton à 98 m, creusement à 94 m (-6 m)
+    // Phase 3 : creusement excessif à 90 m (-10 m), fiche restante de 2 m menant à la rupture de butée
+    const resPhasee = calculerParoiPhasee({
+      coteTete: 100.0,
+      coteBase: 88.0,
+      E: 30e6,
+      I: (1 * Math.pow(0.6, 3)) / 12,
+      A: 0.6,
+      couches: [coucheSable],
+      hydrogeologie: hydroSansNappe,
+      configurationNormative: config,
+      etat: 'ELS',
+      phases: [
+        { numero: 1, nom: 'Phase 1 - Excavation 3m', coteFondFouille: 97.0 },
+        { numero: 2, nom: 'Phase 2 - Buton & Excavation 6m', coteFondFouille: 94.0 },
+        { numero: 3, nom: 'Phase 3 - Excavation critique 10m', coteFondFouille: 90.0 },
+      ],
+      appuis: [
+        { id: 'BUTON-01', cote: 98.0, type: 'buton', raideur: 100000, reactionMax: 500, phaseActivation: 2 },
+      ],
+      khParCouche: 20000,
+      pasMaillage: 0.25,
+    });
+
+    const p1 = resPhasee.phases[0];
+    const p2 = resPhasee.phases[1];
+    const p3 = resPhasee.phases[2];
+
+    const p1Convergé = p1.resultatSolveur.convergence.convergé;
+    const p2Convergé = p2.resultatSolveur.convergence.convergé;
+    const p3EchecSignale = !p3.resultatSolveur.convergence.convergé;
+    const avertissementPresent = p3.resultatSolveur.convergence.avertissements.some(
+      (a) => a.includes('Capacité passive insuffisante') || a.includes('mécanisme')
+    );
+    const deplacementBorne = p3.deplacementMaxAbsolu <= 3.0; // Pas de nombre divergent à 10+ chiffres
+
+    const succes = p1Convergé && p2Convergé && p3EchecSignale && avertissementPresent && deplacementBorne;
+
+    resultats.push({
+      id: 'T_PHASE.4',
+      nom: 'Détection explicite de rupture passive et garde-fou de déplacement (§8.4 / §9.3)',
+      phase: 'Brique §8.4',
+      description:
+        'Vérifie que lorsqu une fouille dépasse la capacité passive de la fiche (mécanisme de rotation), le solveur signale explicitement la non-convergence, émet un avertissement normatif sans divergence numérique à 10+ chiffres.',
+      valeurAttendue: 'Phase 1 & 2 convergées, Phase 3 convergé=false, avertissement mécanisme émis, u_max borné ≤ 3m',
+      valeurObtenue: `P1: ${p1Convergé ? 'OK' : 'KO'}, P2: ${p2Convergé ? 'OK' : 'KO'}, P3 convergé: ${p3.resultatSolveur.convergence.convergé}, u3_max: ${(p3.deplacementMaxAbsolu * 1000).toFixed(1)} mm, avertissements: ${p3.resultatSolveur.convergence.avertissements.length}`,
+      tolerance: 'Détection explicite de mécanisme et bornage physique rigoureux',
+      ecartAbsolu: 0,
+      ecartPourcentage: 0,
+      succes,
+      message: succes
+        ? 'Rupture passive et mécanisme cinématique détectés avec succès : non-convergence explicitement signalée et déplacement physiquement borné'
+        : 'Échec de détection de mécanisme : le solveur renvoie une convergence erronée ou un déplacement aberrant non borné',
+    });
+  }
+
   return resultats;
 }

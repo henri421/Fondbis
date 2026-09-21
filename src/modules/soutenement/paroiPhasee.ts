@@ -376,6 +376,13 @@ export function calculerParoiPhasee(
     }
     if (maxU > envDeplacementMax) envDeplacementMax = maxU;
 
+    if (!resultatSolveur.convergence.convergé) {
+      const msgMecanisme = 'Capacité passive insuffisante / mécanisme potentiel — fiche ou appuis à revoir';
+      if (!resultatSolveur.convergence.avertissements.some((av) => av.includes('Capacité passive insuffisante'))) {
+        resultatSolveur.convergence.avertissements.push(msgMecanisme);
+      }
+    }
+
     resultatsPhases.push({
       phase,
       resultatSolveur,
@@ -388,10 +395,13 @@ export function calculerParoiPhasee(
     });
 
     // D. Chaînage pour la phase suivante : mise à jour de U_precedent
-    // Exigence critique CDC §8.4 : ne jamais repartir de zéro à une phase donnée
-    U_precedent = {
-      deplacements: resultatSolveur.deplacements,
-    };
+    // Exigence critique CDC §8.4 : ne jamais repartir de zéro à une phase donnée.
+    // Si la phase n'a pas convergé (rupture ou mécanisme), conserver le dernier état convergé stable.
+    if (resultatSolveur.convergence.convergé) {
+      U_precedent = {
+        deplacements: resultatSolveur.deplacements,
+      };
+    }
   }
 
   return {

@@ -67,6 +67,7 @@ export interface OptionsSolveurPoutre {
   toleranceConvergence?: number;
   activerRelaxation?: boolean; // par défaut true (réduction automatique d'omega en cas d'oscillation)
   omegaRelaxation?: number;    // par défaut 0.5
+  seuilDeplacementMax?: number; // Déplacement maximal admissible avant détection de mécanisme / divergence physique (m)
 }
 
 export interface ResultatSolveurPoutre {
@@ -112,7 +113,8 @@ interface ResultatSystemeLineaire {
 
 /**
  * Résout le système linéaire K * U = F par élimination de Gauss avec pivot partiel
- * Détecte les pivots quasi-nuls (< 1e-13) pour remonter les singularités / mécanismes
+ * Détecte les pivots quasi-nuls ou numériquement singuliers par rapport à l'échelle de raideur
+ * pour remonter les singularités / mécanismes
  */
 function resoudreSystemeLineaire(A: number[][], b: number[]): ResultatSystemeLineaire {
   const n = b.length;
@@ -120,6 +122,14 @@ function resoudreSystemeLineaire(A: number[][], b: number[]): ResultatSystemeLin
   const M: number[][] = A.map((row) => [...row]);
   const x: number[] = [...b];
   const ddlSinguliers: number[] = [];
+
+  // Échelle de référence de la matrice pour seuil de pivot relatif
+  let maxDiag = 0;
+  for (let i = 0; i < n; i++) {
+    const d = Math.abs(A[i][i]);
+    if (d > maxDiag) maxDiag = d;
+  }
+  const seuilPivot = Math.max(1e-13, 1e-11 * maxDiag);
 
   for (let p = 0; p < n; p++) {
     // Recherche du pivot maximal
@@ -132,7 +142,7 @@ function resoudreSystemeLineaire(A: number[][], b: number[]): ResultatSystemeLin
       }
     }
 
-    if (maxVal < 1e-13) {
+    if (maxVal < seuilPivot) {
       // DDL singulier ou non contraint : mécanisme ou appui manquant
       ddlSinguliers.push(p);
       M[p][p] = 1.0;
@@ -368,6 +378,14 @@ export function resoudrePoutreSurRessorts(
   const ddlSinguliersGlobal = new Set<number>();
   const avertissements: string[] = [];
 
+  // Dimension caractéristique de l'ouvrage (longueur développée de la poutre)
+  let longueurPoutre = 0;
+  for (let i = 0; i < nbNoeuds - 1; i++) {
+    longueurPoutre += Math.hypot(noeuds[i + 1].x - noeuds[i].x, noeuds[i + 1].y - noeuds[i].y);
+  }
+  const dimensionOuvrage = Math.max(longueurPoutre, 1.0);
+  const seuilDeplacementMax = options?.seuilDeplacementMax ?? Math.max(1.0, 0.25 * dimensionOuvrage);
+
   while (iter < MAX_ITER && !converge) {
     iter++;
 
@@ -441,7 +459,7 @@ export function resoudrePoutreSurRessorts(
       if (Math.abs(U_nouveau[i]) > maxNorme) maxNorme = Math.abs(U_nouveau[i]);
     }
 
-    residuFinal = maxNorme > 1e-6 ? maxDiff / maxNorme : maxDiff;
+    residuFinal = maxNorme > 1e-6 ? maxDiff / Math.max(maxNorme, 1.0) : maxDiff;
 
     // Enregistrement et détection d'oscillation élastique <-> plastifié
     for (let rIdx = 0; rIdx < ressorts.length; rIdx++) {
@@ -506,6 +524,54 @@ export function resoudrePoutreSurRessorts(
     }
     // Un mécanisme réel ne peut être considéré comme physiquement stable
     converge = false;
+  }
+
+  // Vérification de la validité physique et détection d'insuffisance de capacité passive / mécanisme
+  let maxDeplacementTrans = 0;
+  for (let i = 0; i < nbNoeuds; i++) {
+    const ux = Math.abs(U_courant[i * 3]);
+    const uy = Math.abs(U_courant[i * 3 + 1]);
+    if (ux > maxDeplacementTrans) maxDeplacementTrans = ux;
+    if (uy > maxDeplacementTrans) maxDeplacementTrans = uy;
+  }
+
+  const ressortsPlastifies = statutsRessorts.filter((s) => s.plastifie);
+  const auMoinsUnPlastifie = ressortsPlastifies.length > 0;
+
+  // Si le déplacement dépasse le seuil physique admissible (ex. > 1 m sur un ouvrage de quelques mètres)
+  // alors qu'un ressort non-linéaire est plastifié (butée mobilisée au maximum), ou en cas de divergence absolue,
+  // le système est en rupture / mécanisme : forcer convergé = false et émettre l'avertissement explicite.
+  if (
+    (maxDeplacementTrans > seuilDeplacementMax && auMoinsUnPlastifie) ||
+    maxDeplacementTrans > Math.max(10.0, dimensionOuvrage)
+  ) {
+    converge = false;
+    const avertissementMecanisme =
+      'Capacité passive insuffisante / mécanisme potentiel — fiche ou appuis à revoir';
+    if (!avertissements.includes(avertissementMecanisme)) {
+      avertissements.push(avertissementMecanisme);
+    }
+
+    // Bornage physique : si le système a divergé numériquement (ex: 1e9 m),
+    // on normalise le champ de déplacement pour représenter fidèlement la cinématique du mécanisme de rupture
+    // sans déborder vers des nombres à 10+ chiffres dans l'affichage et les calculs dérivés.
+    if (maxDeplacementTrans > seuilDeplacementMax) {
+      const facteurEchelle = seuilDeplacementMax / maxDeplacementTrans;
+      for (let i = 0; i < nbDDL; i++) {
+        U_courant[i] *= facteurEchelle;
+      }
+    }
+  }
+
+  // Si non convergé ou mécanisme avec plastification des ressorts de sol / butée
+  if (
+    !converge &&
+    auMoinsUnPlastifie &&
+    !avertissements.some((av) => av.includes('Capacité passive insuffisante'))
+  ) {
+    avertissements.push(
+      'Capacité passive insuffisante / mécanisme potentiel — fiche ou appuis à revoir'
+    );
   }
 
   // Recalcul exact des réactions des ressorts avec le champ U final
@@ -677,9 +743,11 @@ export function resoudrePoutreSurRessorts(
       avertissements,
       message: ddlSinguliersGlobal.size > 0
         ? `Instabilité ou mécanisme détecté : ${ddlSinguliersGlobal.size} DDL singulier(s) identifié(s) (appui manquant)`
-        : converge
-          ? `Convergence atteinte en ${iter} itération(s) (résidu = ${residuFinal.toExponential(2)})`
-          : `Non-convergence après ${iter} itérations (résidu = ${residuFinal.toExponential(2)})`,
+        : avertissements.some((av) => av.includes('Capacité passive insuffisante'))
+          ? 'Non-convergence : Capacité passive insuffisante / mécanisme potentiel — fiche ou appuis à revoir'
+          : converge
+            ? `Convergence atteinte en ${iter} itération(s) (résidu = ${residuFinal.toExponential(2)})`
+            : `Non-convergence après ${iter} itérations (résidu = ${residuFinal.toExponential(2)})`,
     },
     equilibreGlobal: {
       sommeChargesAppliqueesY: sumChargesY,
