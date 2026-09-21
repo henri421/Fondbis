@@ -9,6 +9,10 @@ import {
   verifierResistanceBlindagePose,
   verifierFicheProfileReduite,
 } from '../modules/soutenement/berlinoise';
+import {
+  verifierRecouvrementPieuxSecants,
+  calculerInertieCompositePieuxSecants,
+} from '../modules/soutenement/pieuxSecants';
 
 /**
  * Suite de tests d'acceptation normatifs pour les écrans et parois de soutènement (Phase 4 / §8)
@@ -674,6 +678,123 @@ export function executerTestsAcceptationSoutenement(
       message: succes
         ? 'Fiche réduite correctement évaluée sur les 3 cas, garde-fou local opérationnel et non silencieux'
         : 'Classification incorrecte sur au moins un des 3 cas (conforme / garde-fou / avertissement)',
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // T_PSEC.1 — Recouvrement pieux sécants : conforme, insuffisant, rompu (§8.5)
+  // --------------------------------------------------------------------------
+  {
+    const geometrie = {
+      diametrePrimaire: 0.8,
+      diametreSecondaire: 0.8,
+      entraxe: 0.65,
+    };
+    const profondeurMax = 10.0; // m
+
+    // Cas A : déviation 0.5%, seuil 0.03 m -> conforme
+    // recouvrementSurface = (0.8+0.8)/2 - 0.65 = 0.15 m
+    // dériveMax = 2*0.005*10 = 0.1 m -> entraxeEffectifMax = 0.75 m
+    // recouvrementProfondeurMax = 0.8 - 0.75 = 0.05 m >= 0.03 m -> conforme
+    const casConforme = verifierRecouvrementPieuxSecants(
+      { ...geometrie, deviationVerticaliteMax: 0.005, recouvrementMinimalRequis: 0.03 },
+      profondeurMax
+    );
+
+    // Cas B : même géométrie, seuil 0.08 m -> non conforme (mais continuité pas rompue)
+    const casInsuffisant = verifierRecouvrementPieuxSecants(
+      { ...geometrie, deviationVerticaliteMax: 0.005, recouvrementMinimalRequis: 0.08 },
+      profondeurMax
+    );
+
+    // Cas C : déviation 2% -> recouvrementProfondeurMax = 0.8 - (0.65 + 0.4) = -0.25 m
+    // -> continuité mécanique rompue, quel que soit le seuil
+    const casRompu = verifierRecouvrementPieuxSecants(
+      { ...geometrie, deviationVerticaliteMax: 0.02, recouvrementMinimalRequis: 0.03 },
+      profondeurMax
+    );
+
+    const recouvrementSurfaceAttendu = 0.15;
+    const ecartSurface = Math.abs(casConforme.recouvrementSurface - recouvrementSurfaceAttendu);
+    const recouvrementProfondeurAttendu = 0.05;
+    const ecartProfondeur = Math.abs(casConforme.recouvrementProfondeurMax - recouvrementProfondeurAttendu);
+
+    const succes =
+      ecartSurface < 1e-9 &&
+      ecartProfondeur < 1e-9 &&
+      casConforme.conforme === true &&
+      casConforme.continuiteMecaniqueRompue === false &&
+      casInsuffisant.conforme === false &&
+      casInsuffisant.continuiteMecaniqueRompue === false &&
+      casRompu.continuiteMecaniqueRompue === true &&
+      casRompu.conforme === false &&
+      Math.abs(casRompu.recouvrementProfondeurMax - -0.25) < 1e-9;
+
+    resultats.push({
+      id: 'T_PSEC.1',
+      nom: 'Recouvrement pieux sécants : conforme, insuffisant, continuité rompue',
+      phase: 'Surcouche §8.5',
+      description:
+        'Dp=Ds=0.8 m, entraxe=0.65 m, profondeur=10 m. Cas A (déviation 0.5%, seuil 0.03 m) conforme ; Cas B (même géométrie, seuil 0.08 m) non conforme sans rupture ; Cas C (déviation 2%) continuité mécanique rompue.',
+      valeurAttendue: 'recouvrementSurface=0.15 m, recouvrementProfondeurMax(A)=0.05 m, conforme=true/false, rompu(C)=true (recouvrement=-0.25 m)',
+      valeurObtenue: `A: surface=${casConforme.recouvrementSurface.toFixed(3)} m, profondeur=${casConforme.recouvrementProfondeurMax.toFixed(3)} m, conforme=${casConforme.conforme} | B: conforme=${casInsuffisant.conforme}, rompu=${casInsuffisant.continuiteMecaniqueRompue} | C: profondeur=${casRompu.recouvrementProfondeurMax.toFixed(3)} m, rompu=${casRompu.continuiteMecaniqueRompue}`,
+      tolerance: '1e-9 sur les valeurs géométriques, strict sur les booléens',
+      ecartAbsolu: Math.max(ecartSurface, ecartProfondeur),
+      ecartPourcentage: 0,
+      succes,
+      message: succes
+        ? 'Recouvrement géométrique correct sur les 3 cas, dérive de forage et seuil d\'étanchéité correctement appliqués'
+        : 'Écart sur le recouvrement géométrique ou mauvaise classification conforme/rompu',
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // T_PSEC.2 — Inertie composite pieux sécants, cas symétrique (§8.5)
+  // --------------------------------------------------------------------------
+  {
+    // Non-régression : pas de solution de référence externe indépendante disponible pour
+    // une section composite exacte (cf. spec, approximation par superposition documentée) —
+    // ce test fige la formule des axes parallèles (Huygens) une fois vérifiée à la main,
+    // il ne prouve pas son exactitude physique de façon indépendante.
+    const Dp = 0.8;
+    const Ds = 0.8;
+    const entraxe = 0.65;
+
+    const resultat = calculerInertieCompositePieuxSecants({
+      diametrePrimaire: Dp,
+      diametreSecondaire: Ds,
+      entraxe,
+    });
+
+    // Calcul à la main (cas symétrique Dp=Ds -> centre de gravité exactement à entraxe/2) :
+    const Ap = (Math.PI * Dp * Dp) / 4;
+    const Ip = (Math.PI * Dp ** 4) / 64;
+    const d = entraxe / 2;
+    const I_totalAttendu = 2 * (Ip + Ap * d * d);
+    const A_totalAttendu = 2 * Ap;
+    const I_m4ParMAttendu = I_totalAttendu / entraxe;
+    const A_m2ParMAttendu = A_totalAttendu / entraxe;
+
+    const ecartI = Math.abs(resultat.I_m4ParM - I_m4ParMAttendu);
+    const ecartA = Math.abs(resultat.A_m2ParM - A_m2ParMAttendu);
+
+    const succes = ecartI < 1e-9 && ecartA < 1e-9 && resultat.approximationSuperposition === true;
+
+    resultats.push({
+      id: 'T_PSEC.2',
+      nom: 'Inertie composite pieux sécants (superposition, cas symétrique)',
+      phase: 'Surcouche §8.5',
+      description:
+        'Dp=Ds=0.8 m, entraxe=0.65 m : par symétrie le centre de gravité du motif primaire+secondaire est exactement à entraxe/2. Vérifie la formule des axes parallèles (Huygens) appliquée par le moteur contre le même calcul reproduit indépendamment dans le test.',
+      valeurAttendue: `I_m4ParM = ${I_m4ParMAttendu.toFixed(6)} m⁴/m, A_m2ParM = ${A_m2ParMAttendu.toFixed(6)} m²/m, approximationSuperposition = true`,
+      valeurObtenue: `I_m4ParM = ${resultat.I_m4ParM.toFixed(6)} m⁴/m, A_m2ParM = ${resultat.A_m2ParM.toFixed(6)} m²/m, approximationSuperposition = ${resultat.approximationSuperposition}`,
+      tolerance: '1e-9 (calcul déterministe)',
+      ecartAbsolu: Math.max(ecartI, ecartA),
+      ecartPourcentage: 0,
+      succes,
+      message: succes
+        ? 'Inertie composite conforme à la formule des axes parallèles, hypothèse de superposition bien signalée'
+        : 'Écart sur l\'inertie ou l\'aire composite calculée',
     });
   }
 
