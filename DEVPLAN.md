@@ -2238,21 +2238,39 @@ répliquant la même formule des axes parallèles. `T_PSEC.2` est donc un test d
 l'implémentation), pas une preuve d'exactitude indépendante comme les autres tests de cette
 suite — limite à documenter explicitement dans la description du test lui-même.
 
-### 6. Vérifications
-- `npx tsc --noEmit`, `npm run test:acceptance` (37/37 attendu : 35 + T_PSEC.1 + T_PSEC.2),
-  `npm run build`.
-- Vérification manuelle en navigateur (Chromium disponible dans ce sandbox) : bascule vers
-  Pieux Sécants, saisie des paramètres, carte de résultats cohérente, export JSON + rechargement
-  pour confirmer la persistance (même méthode que pour la Réserve 2).
+### 6. Vérifications — toutes faites (2026-09-22, Claude)
+- `npx tsc --noEmit` propre, `npm run test:acceptance` **37/37** (35 + `T_PSEC.1` +
+  `T_PSEC.2`), `npm run build` propre.
+- **Vérification manuelle en navigateur**, script Playwright, sur le projet d'exemple (paroi
+  de 12 m, cote tête 245.3 / base 233.3) : bascule vers Pieux Sécants, valeurs par défaut
+  (Dp=Ds=0.8 m, entraxe=0.65 m, déviation=1%, seuil=0.05 m). Carte de résultats : recouvrement
+  en tête = 150 mm (= (0.8+0.8)/2 - 0.65, exact), recouvrement au pied = **-90 mm** (=
+  0.8 - (0.65 + 2×0.01×12), exact) → **continuité mécanique rompue**, badge rouge affiché —
+  un résultat réaliste et non anodin sur la géométrie par défaut du projet d'exemple, pas un
+  cas de test artificiel qui ne se déclencherait jamais en pratique. Modifié diamètre
+  primaire → 0.9 m et entraxe → 0.7 m, `Exporter JSON` (2 entrées `soutenements` confirmées,
+  `parametresPieuxSecants` avec les valeurs modifiées), rechargement complet de la page :
+  sous-type et valeurs restaurés. Aucune erreur console.
+
+**Revue (2026-09-22, Claude) : acceptée, aucune réserve.** Relu `pieuxSecants.ts` contre la
+spec : les deux fonctions sont pures, sans dépendance au solveur partagé, la saisie directe
+de la tolérance de verticalité et du recouvrement minimal est bien respectée (aucune valeur
+codée en dur pour ces deux paramètres projet-spécifiques), et l'approximation de
+superposition pour l'inertie composite est explicitement signalée dans le type
+(`approximationSuperposition: true`) et rappelée dans l'UI. `git diff` du début de cette
+tâche à HEAD confirme qu'aucun fichier du cœur partagé n'a été touché. La surcouche §8.5 du
+CDC est maintenant **complète** : Berlinoise et Pieux Sécants implémentées et vérifiées, Mur
+en L restant hors périmètre comme prévu par le CDC lui-même.
 
 
 ## Prochaines étapes (selon plan)
 
 1. **Surcouche Berlinoise (§8.5)** — **close** : implémentée, testée (35/35), revue, vérifiée
-   en navigateur, persistance de tout l'onglet Paroi Phasée (Réserve 2) corrigée (voir
-   ci-dessus, 2026-09-21). Plus aucune réserve ouverte.
-2. **Surcouche pieux sécants (§8.5)** — pas encore spécifiée, à faire après la berlinoise.
-   Peut maintenant s'appuyer sur un solveur robuste (Cause 2 résolue, voir merge ci-dessus).
+   en navigateur, persistance de tout l'onglet Paroi Phasée (Réserve 2) corrigée
+   (2026-09-21). Plus aucune réserve ouverte.
+2. **Surcouche Pieux Sécants (§8.5)** — **close** : implémentée, testée (37/37 au total),
+   revue, vérifiée en navigateur avec persistance (2026-09-22). **Les 3 surcouches §8.5 du
+   CDC sont maintenant traitées** (Mur en L hors périmètre par le CDC lui-même).
 3. ~~**Correction définitive du solveur (Cause 2)**~~ — **résolue** par `82ce1e6` (upstream)
    + merge ci-dessus. Le garde-fou local de la surcouche Berlinoise s'appuie maintenant sur
    ce signal plutôt que de le dupliquer.
