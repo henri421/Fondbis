@@ -145,3 +145,75 @@ export function verifierFicheProfileReduite(
       : undefined,
   };
 }
+
+export interface ResultatSurcoucheBerlinoisePhase {
+  phase: PhaseParoi;
+  repartition: ResultatRepartitionProfileBlindage;
+  stabiliteFront: ResultatStabiliteFrontNonSoutenu;
+  resistanceBlindage: ResultatResistanceBlindage;
+  ficheReduite: ResultatFicheReduite;
+}
+
+/**
+ * Orchestrateur : calcule les 4 vérifications §8.5 pour chaque phase à partir des résultats
+ * déjà produits par calculerParoiPhasee (Niveau 2). Ne recalcule jamais le moteur partagé.
+ */
+export function calculerSurcoucheBerlinoise(
+  resultat: ResultatCalculParoiPhasee,
+  parametres: ParametresProfileBerlinoise,
+  couches: CoucheGeotechnique[],
+  configurationNormative: ConfigurationNormative,
+  hauteurTotaleOuvrage: number
+): ResultatSurcoucheBerlinoisePhase[] {
+  return resultat.phases.map((resultatPhase) => {
+    const repartition = calculerRepartitionProfileBlindage(
+      resultatPhase.momentMaxAbsolu,
+      parametres.entraxeProfiles
+    );
+
+    const coteFondFouille = resultatPhase.phase.coteFondFouille;
+    const coucheFront = trouverCoucheACote(couches, coteFondFouille - 0.1) || couches[0];
+    const stabiliteFront = verifierStabiliteFrontNonSoutenu(
+      coucheFront.resistanceNonDrainee.cuTete.v,
+      configurationNormative.facteursSol.M2.gamma_cu,
+      coucheFront.poidsVolumiques.gammaHumide.v,
+      parametres.blindage.hauteurPasse
+    );
+
+    const ptFront = resultatPhase.profilPressionLimite
+      .filter((p) => p.cote <= coteFondFouille + 1e-4)
+      .sort((a, b) => b.cote - a.cote)[0];
+    const resistanceBlindage = verifierResistanceBlindagePose(
+      ptFront?.Pa ?? 0,
+      parametres.entraxeProfiles,
+      parametres.blindage.epaisseur,
+      parametres.blindage.contrainteAdmissible
+    );
+
+    const noeudsSousFiche: NoeudFicheBerlinoise[] = [];
+    for (let i = 0; i < resultat.cotes.length; i++) {
+      const cote = resultat.cotes[i];
+      if (cote > coteFondFouille - 1e-4) continue;
+      const pt = resultatPhase.profilPressionLimite.find((p) => Math.abs(p.cote - cote) < 1e-3);
+      const reactionRessort = resultatPhase.resultatSolveur.reactionsRessorts.find(
+        (r) => r.noeudIndex === i && r.direction === 'x'
+      );
+      noeudsSousFiche.push({
+        cote,
+        demandeMobiliseeParM: Math.abs(reactionRessort?.reaction ?? 0),
+        Pp: pt?.Pp ?? 0,
+        largeurTributaire: resultat.largeursTributaires[i],
+      });
+    }
+    const ficheReduite = verifierFicheProfileReduite(
+      noeudsSousFiche,
+      parametres.entraxeProfiles,
+      parametres.profile.largeur,
+      resultatPhase.deplacementMaxAbsolu,
+      resultatPhase.mobilisationButeeMax,
+      hauteurTotaleOuvrage
+    );
+
+    return { phase: resultatPhase.phase, repartition, stabiliteFront, resistanceBlindage, ficheReduite };
+  });
+}
