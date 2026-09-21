@@ -18,6 +18,11 @@ import {
   ParametresProfileBerlinoise,
   ResultatSurcoucheBerlinoisePhase,
 } from '../../modules/soutenement/berlinoise';
+import {
+  verifierRecouvrementPieuxSecants,
+  calculerInertieCompositePieuxSecants,
+  ResultatRecouvrementPieuxSecants,
+} from '../../modules/soutenement/pieuxSecants';
 import { trouverCoucheACote } from '../../core/profilContraintes';
 import {
   Layers,
@@ -90,8 +95,12 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
   const [epaisseur, setEpaisseur] = useState<number>(
     soutenementExistant?.epaisseurVoile ?? 0.6
   );
-  const [sousType, setSousType] = useState<'continue' | 'berlinoise'>(
-    soutenementExistant?.sousType === 'berlinoise' ? 'berlinoise' : 'continue'
+  const [sousType, setSousType] = useState<'continue' | 'berlinoise' | 'pieuxSecants'>(
+    soutenementExistant?.sousType === 'berlinoise'
+      ? 'berlinoise'
+      : soutenementExistant?.sousType === 'pieuxSecants'
+      ? 'pieuxSecants'
+      : 'continue'
   );
   const [entraxeProfiles, setEntraxeProfiles] = useState<number>(
     soutenementExistant?.parametresBerlinoise?.entraxeProfiles ?? 1.2
@@ -114,6 +123,21 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
   const [blindageContrainteAdm, setBlindageContrainteAdm] = useState<number>(
     soutenementExistant?.parametresBerlinoise?.blindage.contrainteAdmissible ?? 10000
   ); // kPa
+  const [diametrePrimaire, setDiametrePrimaire] = useState<number>(
+    soutenementExistant?.parametresPieuxSecants?.diametrePrimaire ?? 0.8
+  ); // m
+  const [diametreSecondaire, setDiametreSecondaire] = useState<number>(
+    soutenementExistant?.parametresPieuxSecants?.diametreSecondaire ?? 0.8
+  ); // m
+  const [entraxePieux, setEntraxePieux] = useState<number>(
+    soutenementExistant?.parametresPieuxSecants?.entraxe ?? 0.65
+  ); // m
+  const [deviationVerticaliteMax, setDeviationVerticaliteMax] = useState<number>(
+    soutenementExistant?.parametresPieuxSecants?.deviationVerticaliteMax ?? 0.01
+  ); // sans unité (pente), 0.01 = 1%
+  const [recouvrementMinimalRequis, setRecouvrementMinimalRequis] = useState<number>(
+    soutenementExistant?.parametresPieuxSecants?.recouvrementMinimalRequis ?? 0.05
+  ); // m
   const [moduleE_GPa, setModuleE_GPa] = useState<number>(soutenementExistant?.moduleE_GPa ?? 30.0); // 30 GPa béton
   const [etatCalcul, setEtatCalcul] = useState<'ELS' | 'ELU'>(soutenementExistant?.etatCalcul ?? 'ELS');
   const [phaseActiveIndex, setPhaseActiveIndex] = useState<number>(0);
@@ -230,9 +254,29 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
   // Inertie et section calculées par mètre linéaire.
   // Berlinoise : rigidité "lissée" = rigidité du profilé isolé répartie sur son entraxe
   // (le solveur Niveau 2 travaille par mètre linéaire de paroi, pas par profilé).
+  // Pieux sécants : béton comme la paroi continue (module E réutilisé), I/A composites par
+  // superposition des sections primaire/secondaire (approximation documentée, cf. spec §8.5).
+  const inertieCompositePieux =
+    sousType === 'pieuxSecants'
+      ? calculerInertieCompositePieuxSecants({
+          diametrePrimaire,
+          diametreSecondaire,
+          entraxe: entraxePieux,
+        })
+      : null;
   const E_kPa = sousType === 'berlinoise' ? 210.0e6 : moduleE_GPa * 1e6; // 210 GPa acier
-  const I_m4 = sousType === 'berlinoise' ? profileI / entraxeProfiles : (1.0 * Math.pow(epaisseur, 3)) / 12;
-  const A_m2 = sousType === 'berlinoise' ? profileLargeur / entraxeProfiles : 1.0 * epaisseur;
+  const I_m4 =
+    sousType === 'berlinoise'
+      ? profileI / entraxeProfiles
+      : sousType === 'pieuxSecants'
+      ? inertieCompositePieux!.I_m4ParM
+      : (1.0 * Math.pow(epaisseur, 3)) / 12;
+  const A_m2 =
+    sousType === 'berlinoise'
+      ? profileLargeur / entraxeProfiles
+      : sousType === 'pieuxSecants'
+      ? inertieCompositePieux!.A_m2ParM
+      : 1.0 * epaisseur;
 
   // 2. Calcul par éléments finis phasé
   const resultatCalcul: ResultatCalculParoiPhasee | null = useMemo(() => {
@@ -265,6 +309,9 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
     A_m2,
     sousType,
     entraxeProfiles,
+    diametrePrimaire,
+    diametreSecondaire,
+    entraxePieux,
     modele.couches,
     modele.hydrogeologie,
     modele.configurationNormative,
@@ -344,6 +391,31 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
       ? surcoucheBerlinoise[phaseIndexEffectif] ?? null
       : null;
 
+  // Surcouche Pieux Sécants (§8.5) : recouvrement géométrique (dérive de forage sur toute la
+  // hauteur des pieux) — ne dépend pas du phasage d'excavation, calculé une seule fois.
+  const surcouchePieuxSecants: ResultatRecouvrementPieuxSecants | null = useMemo(() => {
+    if (sousType !== 'pieuxSecants') return null;
+    return verifierRecouvrementPieuxSecants(
+      {
+        diametrePrimaire,
+        diametreSecondaire,
+        entraxe: entraxePieux,
+        deviationVerticaliteMax,
+        recouvrementMinimalRequis,
+      },
+      coteTete - coteBase
+    );
+  }, [
+    sousType,
+    diametrePrimaire,
+    diametreSecondaire,
+    entraxePieux,
+    deviationVerticaliteMax,
+    recouvrementMinimalRequis,
+    coteTete,
+    coteBase,
+  ]);
+
   // Synchronisation vers le modèle persisté (IndexedDB via App.tsx). Ne PAS ajouter modele,
   // soutenementExistant ou onUpdateSoutenement aux dépendances : onUpdateSoutenement n'est
   // pas mémoïsée côté App.tsx, une nouvelle référence est créée à chaque sauvegarde, ce qui
@@ -383,6 +455,16 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
               },
             }
           : undefined,
+      parametresPieuxSecants:
+        sousType === 'pieuxSecants'
+          ? {
+              diametrePrimaire,
+              diametreSecondaire,
+              entraxe: entraxePieux,
+              deviationVerticaliteMax,
+              recouvrementMinimalRequis,
+            }
+          : undefined,
     };
     onUpdateSoutenement(ouvrage);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- voir commentaire ci-dessus
@@ -390,6 +472,7 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
     coteTete, coteBase, epaisseur, moduleE_GPa, etatCalcul, phases, appuis, khParCouche,
     sousType, entraxeProfiles, profileI, profileW, profileLargeur,
     blindageHauteurPasse, blindageEpaisseur, blindageContrainteAdm, E_kPa, I_m4, A_m2,
+    diametrePrimaire, diametreSecondaire, entraxePieux, deviationVerticaliteMax, recouvrementMinimalRequis,
   ]);
 
   // Gestion des modifications de phases
@@ -777,6 +860,52 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
               </div>
             </div>
           )}
+
+          {/* Surcouche Pieux Sécants (§8.5) */}
+          {surcouchePieuxSecants && (
+            <div
+              className={`p-3 border rounded-xl shadow-xs ${
+                surcouchePieuxSecants.continuiteMecaniqueRompue
+                  ? 'bg-rose-50/70 border-rose-200 text-rose-950'
+                  : surcouchePieuxSecants.conforme
+                  ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                  : 'bg-amber-50/70 border-amber-200 text-amber-950'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-wider">
+                  Surcouche Pieux Sécants
+                </span>
+                {surcouchePieuxSecants.continuiteMecaniqueRompue ? (
+                  <ShieldAlert className="w-4 h-4 text-rose-600" />
+                ) : (
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                )}
+              </div>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-xl font-black">
+                  {(surcouchePieuxSecants.recouvrementProfondeurMax * 1000).toFixed(0)}
+                </span>
+                <span className="text-xs font-semibold">mm de recouvrement (au pied)</span>
+              </div>
+              <div className="mt-1 text-[10px] font-medium space-y-0.5">
+                <div>
+                  Recouvrement en tête : {(surcouchePieuxSecants.recouvrementSurface * 1000).toFixed(0)} mm
+                </div>
+                <div>
+                  {surcouchePieuxSecants.continuiteMecaniqueRompue
+                    ? 'Continuité mécanique rompue par la dérive de forage'
+                    : surcouchePieuxSecants.conforme
+                    ? 'Recouvrement conforme au seuil requis'
+                    : 'Recouvrement insuffisant vs. seuil requis'}
+                </div>
+                <div className="italic opacity-70">
+                  Inertie composite par superposition des sections pleines — approximation
+                  documentée, à affiner.
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Bannière d'alerte explicite en cas d'instabilité, mécanisme ou avertissements solveur */}
@@ -1093,6 +1222,17 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
             >
               Berlinoise
             </button>
+            <button
+              type="button"
+              onClick={() => setSousType('pieuxSecants')}
+              className={`px-2.5 py-1 rounded-md transition ${
+                sousType === 'pieuxSecants'
+                  ? 'bg-white text-indigo-900 font-bold shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Pieux Sécants
+            </button>
           </div>
 
           <div>
@@ -1210,6 +1350,61 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
                     type="number" step="500" min="1000"
                     value={blindageContrainteAdm}
                     onChange={(e) => setBlindageContrainteAdm(parseFloat(e.target.value) || 10000)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {sousType === 'pieuxSecants' && (
+            <div className="p-2.5 bg-indigo-50/60 border border-indigo-200 rounded-lg space-y-2">
+              <div className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider">
+                Pieux Primaires & Secondaires
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-500 mb-1">Diamètre primaire (m)</label>
+                  <input
+                    type="number" step="0.05" min="0.3" max="2.0"
+                    value={diametrePrimaire}
+                    onChange={(e) => setDiametrePrimaire(parseFloat(e.target.value) || 0.8)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">Diamètre secondaire (m)</label>
+                  <input
+                    type="number" step="0.05" min="0.3" max="2.0"
+                    value={diametreSecondaire}
+                    onChange={(e) => setDiametreSecondaire(parseFloat(e.target.value) || 0.8)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">Entraxe (m)</label>
+                  <input
+                    type="number" step="0.05" min="0.2" max="2.0"
+                    value={entraxePieux}
+                    onChange={(e) => setEntraxePieux(parseFloat(e.target.value) || 0.65)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">Déviation verticalité (-)</label>
+                  <input
+                    type="number" step="0.001" min="0" max="0.1"
+                    value={deviationVerticaliteMax}
+                    onChange={(e) => setDeviationVerticaliteMax(parseFloat(e.target.value) || 0.01)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-slate-500 mb-1">Recouvrement minimal requis (m)</label>
+                  <input
+                    type="number" step="0.01" min="0" max="0.5"
+                    value={recouvrementMinimalRequis}
+                    onChange={(e) => setRecouvrementMinimalRequis(parseFloat(e.target.value) || 0.05)}
                     className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
                   />
                 </div>
