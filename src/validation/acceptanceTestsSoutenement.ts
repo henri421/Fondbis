@@ -3,6 +3,7 @@ import { CONFIG_NORMATIVE_DEFAUT } from '../norme/configNormativeDefaut';
 import { TestResultatIndividuel } from './acceptanceTests';
 import { calculerProfilPressionLimite } from '../modules/soutenement/pressionLimiteParoi';
 import { calculerParoiPhasee } from '../modules/soutenement/paroiPhasee';
+import { calculerRepartitionProfileBlindage } from '../modules/soutenement/berlinoise';
 
 /**
  * Suite de tests d'acceptation normatifs pour les écrans et parois de soutènement (Phase 4 / §8)
@@ -406,6 +407,37 @@ export function executerTestsAcceptationSoutenement(
       message: succes
         ? 'Monotonie physique respectée : sollicitations et flèches augmentent strictement avec le creusement'
         : 'Violation de la monotonie physique (possible inversion de signe des charges ou rigidités)',
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // T_BERL.1 — Répartition profilé/blindage, sans voûte (§8.5)
+  // --------------------------------------------------------------------------
+  {
+    const momentGlobalMaxParM = 150.0; // kNm/m, valeur de référence arbitraire
+    const entraxe = 1.2; // m
+
+    const rep = calculerRepartitionProfileBlindage(momentGlobalMaxParM, entraxe);
+    const momentProfileAttendu = 180.0; // 150 * 1.2, calcul à la main
+
+    const ecart = Math.abs(rep.momentProfile - momentProfileAttendu);
+    const succes = ecart < 1e-6 && rep.voûteNonPriseEnCompte === true;
+
+    resultats.push({
+      id: 'T_BERL.1',
+      nom: 'Répartition profilé/blindage sans réduction de voûte',
+      phase: 'Surcouche §8.5',
+      description:
+        'Conversion du moment global lissé (150 kNm/m) en moment sur un profilé isolé à entraxe 1.2 m, sans aucune réduction liée à un effet de voûte (hypothèse conservatrice).',
+      valeurAttendue: `momentProfile = ${momentProfileAttendu.toFixed(2)} kNm, voûteNonPriseEnCompte = true`,
+      valeurObtenue: `momentProfile = ${rep.momentProfile.toFixed(2)} kNm, voûteNonPriseEnCompte = ${rep.voûteNonPriseEnCompte}`,
+      tolerance: 'Exact (calcul déterministe)',
+      ecartAbsolu: ecart,
+      ecartPourcentage: 0,
+      succes,
+      message: succes
+        ? 'Répartition profilé/blindage conforme, hypothèse conservatrice bien signalée'
+        : 'Écart sur le moment redistribué au profilé',
     });
   }
 
