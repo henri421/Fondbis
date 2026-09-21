@@ -7,6 +7,7 @@ import {
   calculerRepartitionProfileBlindage,
   verifierStabiliteFrontNonSoutenu,
   verifierResistanceBlindagePose,
+  verifierFicheProfileReduite,
 } from '../modules/soutenement/berlinoise';
 
 /**
@@ -517,6 +518,63 @@ export function executerTestsAcceptationSoutenement(
       message: succes
         ? 'Moment demandé correct, classification conforme/non conforme correcte selon la contrainte admissible'
         : 'Écart sur le moment demandé ou mauvaise classification',
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // T_BERL.4 — Fiche réduite : conforme, non conforme, garde-fou déclenché (§8.5)
+  // --------------------------------------------------------------------------
+  {
+    const entraxe = 1.2; // m
+    const largeurProfile = 0.3; // m
+
+    // Cas A : conforme (Pp élevé -> capacité réduite suffisante)
+    const noeudsConforme = [
+      { cote: 90.0, demandeMobiliseeParM: 50.0, Pp: 800.0, largeurTributaire: 0.5 },
+    ];
+    const casConforme = verifierFicheProfileReduite(
+      noeudsConforme, entraxe, largeurProfile, 0.01, 0.6, 10.0
+    );
+
+    // Cas B : non conforme, mais garde-fou NON déclenché (déplacement raisonnable)
+    const noeudsNonConforme = [
+      { cote: 90.0, demandeMobiliseeParM: 50.0, Pp: 200.0, largeurTributaire: 0.5 },
+    ];
+    const casNonConforme = verifierFicheProfileReduite(
+      noeudsNonConforme, entraxe, largeurProfile, 0.01, 0.85, 10.0
+    );
+
+    // Cas C : garde-fou déclenché (déplacement déraisonnable + butée à 100%, comme le bug
+    // réel documenté au DEVPLAN — Phase 3 du projet d'exemple)
+    const casGardeFou = verifierFicheProfileReduite(
+      noeudsConforme, entraxe, largeurProfile, 50.0, 1.0, 10.0
+    );
+
+    const succes =
+      casConforme.conforme === true &&
+      casConforme.gardeFouDeclenche === false &&
+      casNonConforme.conforme === false &&
+      casNonConforme.gardeFouDeclenche === false &&
+      casGardeFou.gardeFouDeclenche === true &&
+      casGardeFou.conforme === false &&
+      typeof casGardeFou.avertissement === 'string' &&
+      casGardeFou.avertissement.length > 0;
+
+    resultats.push({
+      id: 'T_BERL.4',
+      nom: 'Fiche réduite sur largeur propre du profilé + garde-fou local',
+      phase: 'Surcouche §8.5',
+      description:
+        'Cas A (Pp=800 kPa) conforme sans garde-fou ; Cas B (Pp=200 kPa) non conforme sans garde-fou ; Cas C (déplacement=50m, butée=100%) garde-fou déclenché avec avertissement explicite.',
+      valeurAttendue: 'conforme=true/false/false, garde-fou=false/false/true, avertissement non vide en C',
+      valeurObtenue: `A: conforme=${casConforme.conforme}, garde-fou=${casConforme.gardeFouDeclenche} | B: conforme=${casNonConforme.conforme}, garde-fou=${casNonConforme.gardeFouDeclenche} | C: conforme=${casGardeFou.conforme}, garde-fou=${casGardeFou.gardeFouDeclenche}`,
+      tolerance: 'Comparaisons strictes (booléens)',
+      ecartAbsolu: 0,
+      ecartPourcentage: 0,
+      succes,
+      message: succes
+        ? 'Fiche réduite correctement évaluée sur les 3 cas, garde-fou local opérationnel et non silencieux'
+        : 'Classification incorrecte sur au moins un des 3 cas (conforme / garde-fou / avertissement)',
     });
   }
 

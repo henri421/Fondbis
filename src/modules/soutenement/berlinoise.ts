@@ -79,3 +79,69 @@ export function verifierResistanceBlindagePose(
   const momentResistant = (contrainteAdmissible * epaisseurBlindage ** 2) / 6;
   return { momentDemande, momentResistant, conforme: momentResistant >= momentDemande };
 }
+
+export interface NoeudFicheBerlinoise {
+  cote: number;
+  demandeMobiliseeParM: number; // kN/m — |reaction ressort x| au nœud (résultat smeared du solveur)
+  Pp: number; // kPa — borne passive pleine largeur à ce nœud
+  largeurTributaire: number; // m — hauteur d'influence verticale du nœud
+}
+
+export interface ResultatFicheReduite {
+  demandeMax: number; // kN — pire cas sur un profilé isolé
+  capaciteReduiteMax: number; // kN — butée dispo sur la largeur propre du profilé, même nœud
+  conforme: boolean;
+  gardeFouDeclenche: boolean;
+  avertissement?: string;
+}
+
+/**
+ * Vérifie la fiche sur la largeur PROPRE du profilé (pas la largeur tributaire pleine
+ * qu'utilise le solveur Niveau 2 smeared) : sous le fond de fouille, un profilé isolé ne
+ * peut mobiliser la butée que sur sa propre largeur physique, pas sur toute la largeur
+ * qu'occuperait un écran continu.
+ *
+ * Garde-fou local provisoire (PAS une correction du solveur partagé — cf. DEVPLAN, tâche
+ * "Correction définitive du solveur (Cause 2)" toujours en attente) : si le déplacement de
+ * la phase est déraisonnable ET que la butée globale est mobilisée à ~100%, on ne fait pas
+ * confiance au résultat brut du solveur et on force un avertissement explicite.
+ */
+export function verifierFicheProfileReduite(
+  noeudsSousFiche: NoeudFicheBerlinoise[],
+  entraxeProfiles: number,
+  largeurProfile: number,
+  deplacementMaxPhase: number, // m
+  mobilisationButeeMaxPhase: number, // [0..1]
+  hauteurTotaleOuvrage: number // m
+): ResultatFicheReduite {
+  let demandeMax = 0;
+  let capaciteReduiteMax = 0;
+  let pireRatio = 0;
+
+  for (const n of noeudsSousFiche) {
+    const demandeNode = n.demandeMobiliseeParM * entraxeProfiles; // kN
+    const capaciteNode = n.Pp * largeurProfile * n.largeurTributaire; // kN
+    const ratio = capaciteNode > 1e-6 ? demandeNode / capaciteNode : demandeNode > 1e-6 ? Infinity : 0;
+    if (ratio > pireRatio) {
+      pireRatio = ratio;
+      demandeMax = demandeNode;
+      capaciteReduiteMax = capaciteNode;
+    }
+  }
+
+  const conformeBrut = pireRatio <= 1.0;
+
+  const seuilDeplacementDeraisonnable = Math.max(1.0, hauteurTotaleOuvrage / 10);
+  const gardeFouDeclenche =
+    deplacementMaxPhase > seuilDeplacementDeraisonnable && mobilisationButeeMaxPhase >= 0.999;
+
+  return {
+    demandeMax,
+    capaciteReduiteMax,
+    conforme: gardeFouDeclenche ? false : conformeBrut,
+    gardeFouDeclenche,
+    avertissement: gardeFouDeclenche
+      ? `Résultat potentiellement non convergé (déplacement=${(deplacementMaxPhase * 1000).toFixed(0)} mm, butée mobilisée à 100%) — capacité passive possiblement insuffisante sur la largeur réduite du profilé. Voir DEVPLAN, tâche "Correction définitive du solveur (Cause 2)". Vérifier manuellement avant tout usage.`
+      : undefined,
+  };
+}
