@@ -36,3 +36,25 @@ export function calculerRepartitionProfileBlindage(
     voûteNonPriseEnCompte: true,
   };
 }
+
+export interface ResultatStabiliteFrontNonSoutenu {
+  hauteurCritique: number; // m, Hc = 4.cu,d / gamma
+  facteurSecurite: number; // Hc / hauteurPasse
+  stable: boolean;
+}
+
+/**
+ * Stabilité à court terme d'une coupe verticale non soutenue en sol cohérent
+ * (Hc = 4.cu/gamma, formule classique de hauteur critique non soutenue).
+ */
+export function verifierStabiliteFrontNonSoutenu(
+  cu_k: number, // kPa
+  gamma_cu: number, // facteur partiel (facteursSol.M2.gamma_cu)
+  gammaHumide: number, // kN/m³
+  hauteurPasse: number // m
+): ResultatStabiliteFrontNonSoutenu {
+  const cu_d = cu_k / gamma_cu;
+  const hauteurCritique = (4 * cu_d) / gammaHumide;
+  const facteurSecurite = hauteurCritique / hauteurPasse;
+  return { hauteurCritique, facteurSecurite, stable: facteurSecurite >= 1.0 };
+}

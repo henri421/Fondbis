@@ -3,7 +3,10 @@ import { CONFIG_NORMATIVE_DEFAUT } from '../norme/configNormativeDefaut';
 import { TestResultatIndividuel } from './acceptanceTests';
 import { calculerProfilPressionLimite } from '../modules/soutenement/pressionLimiteParoi';
 import { calculerParoiPhasee } from '../modules/soutenement/paroiPhasee';
-import { calculerRepartitionProfileBlindage } from '../modules/soutenement/berlinoise';
+import {
+  calculerRepartitionProfileBlindage,
+  verifierStabiliteFrontNonSoutenu,
+} from '../modules/soutenement/berlinoise';
 
 /**
  * Suite de tests d'acceptation normatifs pour les écrans et parois de soutènement (Phase 4 / §8)
@@ -438,6 +441,44 @@ export function executerTestsAcceptationSoutenement(
       message: succes
         ? 'Répartition profilé/blindage conforme, hypothèse conservatrice bien signalée'
         : 'Écart sur le moment redistribué au profilé',
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // T_BERL.2 — Stabilité du front non soutenu, cas stable et instable (§8.5)
+  // --------------------------------------------------------------------------
+  {
+    const cu_k = 40.0; // kPa
+    const gamma_cu = 1.40; // M2 par défaut (CONFIG_NORMATIVE_DEFAUT)
+    const gammaHumide = 18.0; // kN/m³
+    const hauteurCritiqueAttendue = (4 * (cu_k / gamma_cu)) / gammaHumide; // 6.3492 m
+
+    const casStable = verifierStabiliteFrontNonSoutenu(cu_k, gamma_cu, gammaHumide, 1.5);
+    const casInstable = verifierStabiliteFrontNonSoutenu(cu_k, gamma_cu, gammaHumide, 8.0);
+
+    const ecartHc = Math.abs(casStable.hauteurCritique - hauteurCritiqueAttendue);
+    const succes =
+      ecartHc < 1e-3 &&
+      casStable.stable === true &&
+      casStable.facteurSecurite > 1.0 &&
+      casInstable.stable === false &&
+      casInstable.facteurSecurite < 1.0;
+
+    resultats.push({
+      id: 'T_BERL.2',
+      nom: 'Stabilité du front non soutenu (Hc = 4.cu/gamma)',
+      phase: 'Surcouche §8.5',
+      description:
+        'cu_k=40 kPa, gamma_cu=1.40 (M2), gamma=18 kN/m³ -> Hc=6.35 m. Passe de 1.5 m stable, passe de 8.0 m instable.',
+      valeurAttendue: `Hc = ${hauteurCritiqueAttendue.toFixed(2)} m ; stable(1.5m)=true ; stable(8.0m)=false`,
+      valeurObtenue: `Hc = ${casStable.hauteurCritique.toFixed(2)} m ; FS(1.5m)=${casStable.facteurSecurite.toFixed(2)} (stable=${casStable.stable}) ; FS(8.0m)=${casInstable.facteurSecurite.toFixed(2)} (stable=${casInstable.stable})`,
+      tolerance: '1e-3 m sur Hc, comparaisons strictes sur stable',
+      ecartAbsolu: ecartHc,
+      ecartPourcentage: 0,
+      succes,
+      message: succes
+        ? 'Hauteur critique correcte, cas stable et instable correctement distingués'
+        : 'Écart sur Hc ou mauvaise classification stable/instable',
     });
   }
 
