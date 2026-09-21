@@ -880,11 +880,120 @@ capacité (voire mécanisme), mais `convergence.convergé=true` sans aucun avert
    modules déjà validés (paroi phasée, pieu transversal) — préférer un correctif ciblé et
    testé à une réécriture large.
 
+## Spec — Surcouche Berlinoise (§8.5) (2026-09-21, Claude)
+
+**Contexte.** Les deux niveaux d'analyse existants (mur en L rigide, paroi flexible phasée
+générique) sont validés, mais le CDC §8.5 exige en plus des vérifications propres à chaque
+type d'ouvrage flexible. Aucune des deux surcouches (berlinoise, pieux sécants) n'existe
+encore. Cette spec couvre **la berlinoise seulement** — pieux sécants reste à spécifier
+séparément, plus tard.
+
+**Décisions prises avec Henri avant cette spec :**
+- Le bug non corrigé du solveur (Cause 2, section ci-dessus — convergence silencieuse vers un
+  déplacement absurde quand la butée est à 100% mobilisée) n'est **pas** corrigé en préalable.
+  Traité en parallèle : un garde-fou explicite est ajouté, mais uniquement dans le nouveau
+  code de la surcouche (jamais dans `solveurPoutreRessorts.ts` partagé avec le pieu
+  transversal), en attendant la correction définitive déjà spécifiée plus haut.
+- Les 3 vérifications du §8.5 (répartition profilé/blindage + voûte, stabilité provisoire,
+  fiche réduite) sont livrées ensemble — elles partagent les mêmes données d'entrée.
+- Pas de méthode de référence disponible pour l'effet de voûte du sol entre profilés :
+  hypothèse conservatrice retenue (le profilé reprend 100% de l'effort sur sa largeur
+  tributaire, aucune réduction liée à la voûte), explicitement marquée `voûteNonPriseEnCompte:
+  true` dans le résultat — à remplacer si Henri fournit une méthode sourcée plus tard, sur le
+  principe déjà retenu pour `kh` (saisie/paramétrage direct plutôt qu'un coefficient inventé).
+- « Stabilité du blindage non soutenu en phase provisoire » couvre les deux sens du terme :
+  (a) tenue géotechnique à court terme du front de fouille excavé avant la pose du madrier,
+  (b) tenue structurelle du madrier une fois posé, sous la pression active de la passe.
+- Modèle de données : sous-type sur `OuvrageSoutenement` (pas un nouveau type d'ouvrage à
+  part). UI intégrée dans `OngletParoiPhasee.tsx` (pas de nouvel onglet séparé).
+
+**1. Types (`src/types/geotech.ts`)**
+Ajouter sur `OuvrageSoutenement` :
+```ts
+sousType?: 'continue' | 'berlinoise' | 'pieuxSecants';
+parametresBerlinoise?: {
+  entraxeProfiles: number;   // m
+  profile: { I: number; W: number; largeur: number }; // m⁴, m³, m — propriétés PROPRES
+    // du profilé isolé, à ne pas confondre avec l'EI/m lissé déjà utilisé par le solveur
+    // Niveau 2 (ParametresParoiPhasee.I est un moment quadratique PAR MÈTRE LINÉAIRE).
+  blindage: {
+    hauteurPasse: number;         // m, hauteur d'excavation avant pose d'un madrier
+    epaisseur: number;            // m
+    contrainteAdmissible: number; // kPa
+  };
+};
+```
+Champs optionnels : aucun impact sur les ouvrages existants (mur en L, paroi continue),
+aucune migration de `schemaVersion` nécessaire.
+
+**2. Moteur (`src/modules/soutenement/berlinoise.ts`, nouveau fichier)**
+Module de post-traitement pur, consomme `ResultatCalculParoiPhasee` déjà produit par
+`calculerParoiPhasee` — ne le recalcule pas, ne modifie ni `paroiPhasee.ts` ni
+`solveurPoutreRessorts.ts`. Quatre fonctions exportées :
+
+- `calculerRepartitionProfileBlindage(resultat, parametresBerlinoise)` : pour chaque phase et
+  chaque nœud, `momentProfile = momentParM × entraxeProfiles` (conservateur, sans voûte) ;
+  moment de flexion demandé sur le blindage = pression locale (issue de
+  `calculerProfilPressionLimite`, déjà validée) × `entraxeProfiles² / 8` (poutre simplement
+  appuyée entre deux profilés).
+- `verifierStabiliteFrontNonSoutenu(couches, cote, hauteurPasse)` : hauteur critique non
+  soutenue à court terme `Hc = 4·cu/γ` (coupe verticale en sol cohérent, formule classique),
+  comparée à `hauteurPasse`, avec facteur de sécurité explicite.
+- `verifierResistanceBlindagePose(pressionActive, entraxeProfiles, blindage)` : moment de
+  flexion demandé (poutre simplement appuyée) vs moment résistant
+  (`contrainteAdmissible × epaisseur² / 6` par mètre de largeur de madrier).
+- `verifierFicheProfileReduite(resultat, parametresBerlinoise, couches, configurationNormative)` :
+  reprise de la butée disponible sur la largeur **propre du profilé** (`profile.largeur`) au
+  lieu de la largeur tributaire pleine utilisée par le solveur Niveau 2, comparée à la
+  demande sous le fond de fouille. **Garde-fou local** : si le déplacement issu du solveur
+  dépasse un seuil déraisonnable (retenu : `max(1 m, 10 × hauteurTotale/100)`) alors que
+  `mobilisationButeeMax` de la phase concernée est ≥ 0.999, la fonction retourne un
+  avertissement explicite (« résultat potentiellement non convergé — capacité passive
+  possiblement insuffisante, voir tâche solveur en attente ») au lieu de propager le chiffre
+  brut du solveur. Ce garde-fou est documenté comme provisoire dans le code (commentaire
+  renvoyant à la tâche solveur ci-dessus), pas comme une correction définitive.
+- `calculerSurcoucheBerlinoise(resultat, parametresBerlinoise, couches, configurationNormative)` :
+  orchestrateur combinant les trois vérifications sur toutes les phases, retourne
+  `ResultatSurcoucheBerlinoise` (une entrée par phase).
+
+**3. Tests d'acceptation (`src/validation/acceptanceTestsSoutenement.ts`)**
+- `T_BERL.1` : répartition profilé/blindage — cas à la main, moment linéaire connu × entraxe,
+  vérifie l'absence de réduction de voûte (résultat conservateur attendu).
+- `T_BERL.2` : stabilité du front non soutenu — un cas stable (`hauteurPasse < Hc`) et un cas
+  instable (`hauteurPasse > Hc`) avec `cu`/`γ` connus.
+- `T_BERL.3` : résistance du blindage posé — un cas conforme, un cas non conforme (moment
+  demandé > moment résistant).
+- `T_BERL.4` : fiche réduite — un cas normal (garde-fou non déclenché) et une reprise du cas
+  Phase 3 du projet d'exemple (section « Bug sérieux trouvé... » ci-dessus) vérifiant que le
+  garde-fou se déclenche bien et retourne l'avertissement explicite plutôt qu'un déplacement
+  à 10+ chiffres.
+
+**4. UI (`src/components/soutenement/OngletParoiPhasee.tsx`)**
+Quand `ouvrage.sousType === 'berlinoise'` : section de saisie additionnelle (entraxe, section
+profilé I/W/largeur, blindage épaisseur/contrainte admissible/hauteur de passe) sous les
+champs de géométrie de paroi existants, et un tableau de résultats par phase (moment profilé,
+vérif front non soutenu, vérif blindage posé, vérif fiche réduite) avec badge visible si le
+garde-fou de fiche réduite s'est déclenché sur une phase. Réutilise le sélecteur de phase déjà
+en place, n'introduit pas de nouvelle navigation.
+
+**5. Ne pas toucher**
+`solveurPoutreRessorts.ts`, `paroiPhasee.ts`, `pousseeButee.ts`, `murEnL.ts`, et les tests
+`T_SOLV.*`/`T_PHASE.*`/`T_PIEU_LAT.*` existants — aucune régression attendue ni tolérée sur
+ces briques déjà validées.
+
+
 ## Prochaines étapes (selon plan)
 
-1. **Groupe de pieux (§7.6)** : a priori clos après la revue précédente (Converse-Labarre
+1. **Surcouche Berlinoise (§8.5)** — spec ci-dessus, en cours d'implémentation (Claude,
+   2026-09-21).
+2. **Surcouche pieux sécants (§8.5)** — pas encore spécifiée, à faire après la berlinoise.
+3. **Correction définitive du solveur (Cause 2)** — garde-fou local posé dans la surcouche
+   Berlinoise en attendant, mais la correction dans `solveurPoutreRessorts.ts` reste due
+   (tâche déjà spécifiée plus haut), en particulier avant de construire la surcouche pieux
+   sécants dessus.
+4. **Groupe de pieux (§7.6)** : a priori clos après la revue précédente (Converse-Labarre
    vérifié à la main) — reconfirmer si un point spécifique est soulevé par Henri.
-2. **Dérivation CPT/PMT automatique (§7.4)**, si un jour souhaitée en complément de la saisie
+5. **Dérivation CPT/PMT automatique (§7.4)**, si un jour souhaitée en complément de la saisie
    directe ci-dessus — nécessiterait qu'Henri fournisse la méthode/table exacte de sa
    pratique (voir « Constat d'audit » plus haut). Pas urgent : la saisie directe couvre déjà
    le besoin normatif.
