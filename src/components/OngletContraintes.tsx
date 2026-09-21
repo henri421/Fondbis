@@ -18,8 +18,11 @@ export const OngletContraintes: React.FC<OngletContraintesProps> = ({ modele }) 
     cotesSingulieres.push(modele.ouvrages.pieux[0].coteTete);
     cotesSingulieres.push(modele.ouvrages.pieux[0].cotePointe);
   }
-  if (modele.ouvrages.soutenements[0]) {
-    cotesSingulieres.push(modele.ouvrages.soutenements[0].coteFondFouille);
+  const soutenementPourCoupe =
+    modele.ouvrages.soutenements.find((s) => s.type === 'murEnL') ??
+    modele.ouvrages.soutenements[0];
+  if (soutenementPourCoupe) {
+    cotesSingulieres.push(soutenementPourCoupe.coteFondFouille);
   }
 
   const maillage = construireMaillageVertical({

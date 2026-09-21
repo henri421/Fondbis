@@ -100,12 +100,15 @@ export default function App() {
     });
   };
 
-  const handleUpdateSoutenement = (mur: OuvrageSoutenement) => {
+  // Upsert par type : murEnL et paroiFlexible persistent chacun indépendamment sans
+  // s'écraser l'un l'autre (avant : soutenements: [mur] remplaçait tout le tableau).
+  const handleUpdateSoutenement = (ouvrage: OuvrageSoutenement) => {
+    const autres = modele.ouvrages.soutenements.filter((s) => s.type !== ouvrage.type);
     handleUpdateModele({
       ...modele,
       ouvrages: {
         ...modele.ouvrages,
-        soutenements: [mur],
+        soutenements: [...autres, ouvrage],
       },
     });
   };
@@ -116,7 +119,10 @@ export default function App() {
       return { type: 'pieu' as const, pieu: modele.ouvrages.pieux[0] };
     }
     if (ongletActif === 'soutenement') {
-      return { type: 'soutenement' as const, soutenement: modele.ouvrages.soutenements[0] };
+      const soutenementPourCoupe =
+        modele.ouvrages.soutenements.find((s) => s.type === 'murEnL') ??
+        modele.ouvrages.soutenements[0];
+      return { type: 'soutenement' as const, soutenement: soutenementPourCoupe };
     }
     // Par défaut ou si 'radier' / 'sol' / 'contraintes'
     return { type: 'radier' as const, radier: modele.ouvrages.radiers[0] };

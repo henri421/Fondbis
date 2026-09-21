@@ -245,6 +245,11 @@ export interface OuvrageSoutenement {
       contrainteAdmissible: number; // kPa
     };
   };
+  // Extension : persistance complète de la paroi phasée (Réserve 2, revue Berlinoise)
+  coteBase?: number;                    // m — cote base/fiche de l'écran (paroi phasée)
+  moduleE_GPa?: number;                 // GPa — module d'Young (paroi continue)
+  etatCalcul?: 'ELS' | 'ELU';
+  khParCouche?: Record<string, number>; // kN/m³, clé = CoucheGeotechnique.id
 }
 
 export interface ModeleTerrain {

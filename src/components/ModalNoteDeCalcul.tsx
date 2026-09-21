@@ -14,7 +14,10 @@ interface ModalNoteDeCalculProps {
 export const ModalNoteDeCalcul: React.FC<ModalNoteDeCalculProps> = ({ modele, onClose }) => {
   const radier = modele.ouvrages.radiers[0];
   const pieu = modele.ouvrages.pieux[0];
-  const mur = modele.ouvrages.soutenements[0];
+  // Spécifique au mur en L (verifierMurEnLELU ci-dessous) — ne jamais substituer par
+  // soutenements[0] au cas où seule une entrée paroiFlexible existe : verifierMurEnLELU
+  // attend largeurSemelleB/debordAvant/ficheT (mur en L), pas les champs de paroi phasée.
+  const mur = modele.ouvrages.soutenements.find((s) => s.type === 'murEnL');
 
   const resRadierELU = radier
     ? verifierPortanceRadierELU(

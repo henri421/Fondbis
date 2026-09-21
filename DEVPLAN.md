@@ -2044,23 +2044,30 @@ const [etatCalcul, setEtatCalcul] = useState<'ELS' | 'ELU'>(soutenementExistant?
   ]);
 ```
 
-### 6. Vérifications
-- `npx tsc --noEmit` propre.
-- `npm run test:acceptance` : 35/35 inchangé (rien ici ne touche le moteur de calcul).
+### 6. Vérifications — toutes faites (2026-09-21, Claude)
+- `npx tsc --noEmit` propre (après `npm install` pour récupérer `recharts`, ajouté par un
+  autre commit concurrent entre-temps — sans rapport avec cette tâche).
+- `npm run test:acceptance` : **35/35** inchangé (rien ici ne touche le moteur de calcul).
 - `npm run build` propre.
-- **Vérification manuelle en navigateur** (Chromium maintenant installé dans ce sandbox) :
-  ouvrir Module C, saisir des valeurs sur Mur en L ET sur Paroi Phasée (Berlinoise inclus),
-  changer d'onglet, recharger la page (`location.reload()` ou fermer/rouvrir la session
-  Chromium), et vérifier par `Exporter JSON` ou relecture d'écran que les DEUX ouvrages sont
-  toujours là avec les bonnes valeurs.
+- **Vérification manuelle en navigateur**, script Playwright : sur le projet d'exemple,
+  Largeur semelle B (Mur en L) → `3.33`, Cote Tête (Paroi Phasée) → `250.5`, bascule
+  Berlinoise, Entraxe profilés → `1.77`. Aucune erreur console (notamment aucune erreur React
+  "Maximum update depth exceeded" — confirme l'absence de boucle infinie malgré le piège de
+  dépendances documenté au point 5). `Exporter JSON` puis lecture du fichier : **2 entrées**
+  dans `soutenements` (`murEnL` avec `largeurSemelleB=3.33`, `paroiFlexible` avec
+  `sousType=berlinoise`, `coteTete=250.5`, `entraxeProfiles=1.77`) — l'upsert par type
+  fonctionne, aucun écrasement croisé. Rechargement complet de la page (`page.reload()`) :
+  les trois valeurs de test sont toujours affichées dans les champs correspondants, y
+  compris le sous-type Berlinoise restauré (le panneau "Profilés & Blindage" réapparaît).
+
+**Réserve 2 de la revue Berlinoise : levée.**
 
 
 ## Prochaines étapes (selon plan)
 
 1. **Surcouche Berlinoise (§8.5)** — **close** : implémentée, testée (35/35), revue, vérifiée
-   en navigateur (voir ci-dessus, 2026-09-21). Reste Réserve 2 (pas de persistance
-   `sousType`/`parametresBerlinoise`), non bloquante, comportement préexistant sur tout
-   l'onglet.
+   en navigateur, persistance de tout l'onglet Paroi Phasée (Réserve 2) corrigée (voir
+   ci-dessus, 2026-09-21). Plus aucune réserve ouverte.
 2. **Surcouche pieux sécants (§8.5)** — pas encore spécifiée, à faire après la berlinoise.
    Peut maintenant s'appuyer sur un solveur robuste (Cause 2 résolue, voir merge ci-dessus).
 3. ~~**Correction définitive du solveur (Cause 2)**~~ — **résolue** par `82ce1e6` (upstream)

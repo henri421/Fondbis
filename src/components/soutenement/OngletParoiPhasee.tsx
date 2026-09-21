@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ModeleTerrain,
   OuvrageSoutenement,
@@ -82,9 +82,10 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
     soutenementExistant?.coteTete ?? coteTNReelle
   );
   const [coteBase, setCoteBase] = useState<number>(
-    soutenementExistant?.coteFondFouille
-      ? soutenementExistant.coteFondFouille - 6.0
-      : coteTNReelle - 12.0
+    soutenementExistant?.coteBase ??
+      (soutenementExistant?.coteFondFouille
+        ? soutenementExistant.coteFondFouille - 6.0
+        : coteTNReelle - 12.0)
   );
   const [epaisseur, setEpaisseur] = useState<number>(
     soutenementExistant?.epaisseurVoile ?? 0.6
@@ -113,8 +114,8 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
   const [blindageContrainteAdm, setBlindageContrainteAdm] = useState<number>(
     soutenementExistant?.parametresBerlinoise?.blindage.contrainteAdmissible ?? 10000
   ); // kPa
-  const [moduleE_GPa, setModuleE_GPa] = useState<number>(30.0); // 30 GPa béton
-  const [etatCalcul, setEtatCalcul] = useState<'ELS' | 'ELU'>('ELS');
+  const [moduleE_GPa, setModuleE_GPa] = useState<number>(soutenementExistant?.moduleE_GPa ?? 30.0); // 30 GPa béton
+  const [etatCalcul, setEtatCalcul] = useState<'ELS' | 'ELU'>(soutenementExistant?.etatCalcul ?? 'ELS');
   const [phaseActiveIndex, setPhaseActiveIndex] = useState<number>(0);
   const [vueEnveloppe, setVueEnveloppe] = useState<boolean>(false);
   const [diagrammeAffiche, setDiagrammeAffiche] = useState<
@@ -201,6 +202,15 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
 
   // Saisie directe de kh (kN/m³) par couche
   const [khParCouche, setKhParCouche] = useState<Record<string, number>>(() => {
+    // Reprendre les valeurs persistées si elles couvrent bien toutes les couches actuelles
+    // (un projet dont les couches ont changé depuis la dernière sauvegarde retombe sur
+    // l'heuristique par nature de sol plutôt que d'utiliser des kh partiels/obsolètes).
+    if (
+      soutenementExistant?.khParCouche &&
+      modele.couches.every((c) => soutenementExistant.khParCouche![c.id] !== undefined)
+    ) {
+      return soutenementExistant.khParCouche;
+    }
     const initial: Record<string, number> = {};
     for (const c of modele.couches) {
       // Valeurs représentatives indicatives selon la lithologie
@@ -333,6 +343,54 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
     surcoucheBerlinoise && surcoucheBerlinoise.length > 0
       ? surcoucheBerlinoise[phaseIndexEffectif] ?? null
       : null;
+
+  // Synchronisation vers le modèle persisté (IndexedDB via App.tsx). Ne PAS ajouter modele,
+  // soutenementExistant ou onUpdateSoutenement aux dépendances : onUpdateSoutenement n'est
+  // pas mémoïsée côté App.tsx, une nouvelle référence est créée à chaque sauvegarde, ce qui
+  // bouclerait à l'infini si elle déclenchait elle-même cet effet.
+  useEffect(() => {
+    if (!onUpdateSoutenement) return;
+    const ouvrage: OuvrageSoutenement = {
+      id: soutenementExistant?.id ?? 'PAROI-01',
+      nom: soutenementExistant?.nom ?? 'Paroi phasée',
+      type: 'paroiFlexible',
+      hauteurTotale: coteTete - coteBase,
+      coteTete,
+      coteFondFouille: phases[phases.length - 1]?.coteFondFouille ?? coteTete,
+      coteBase,
+      epaisseurVoile: epaisseur,
+      surchargeQ: soutenementExistant?.surchargeQ ?? 0,
+      inclinaisonTerrePlein: soutenementExistant?.inclinaisonTerrePlein ?? 0,
+      frottementDeltaSurPhi: soutenementExistant?.frottementDeltaSurPhi ?? 0.667,
+      butons: [],
+      phases,
+      appuisPhases: appuis,
+      EI: E_kPa * I_m4,
+      EA: E_kPa * A_m2,
+      moduleE_GPa,
+      etatCalcul,
+      khParCouche,
+      sousType,
+      parametresBerlinoise:
+        sousType === 'berlinoise'
+          ? {
+              entraxeProfiles,
+              profile: { I: profileI, W: profileW, largeur: profileLargeur },
+              blindage: {
+                hauteurPasse: blindageHauteurPasse,
+                epaisseur: blindageEpaisseur,
+                contrainteAdmissible: blindageContrainteAdm,
+              },
+            }
+          : undefined,
+    };
+    onUpdateSoutenement(ouvrage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- voir commentaire ci-dessus
+  }, [
+    coteTete, coteBase, epaisseur, moduleE_GPa, etatCalcul, phases, appuis, khParCouche,
+    sousType, entraxeProfiles, profileI, profileW, profileLargeur,
+    blindageHauteurPasse, blindageEpaisseur, blindageContrainteAdm, E_kPa, I_m4, A_m2,
+  ]);
 
   // Gestion des modifications de phases
   const handleAddPhase = () => {
