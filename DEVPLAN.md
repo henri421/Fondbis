@@ -2063,6 +2063,189 @@ const [etatCalcul, setEtatCalcul] = useState<'ELS' | 'ELU'>(soutenementExistant?
 **Réserve 2 de la revue Berlinoise : levée.**
 
 
+## Spec + Plan — Surcouche Paroi de Pieux Sécants (§8.5) (2026-09-22, Claude)
+
+**Contexte.** Dernière surcouche §8.5 documentée par le CDC : la Berlinoise est close, la
+surcouche « Mur en L » est explicitement hors périmètre (renvoyée aux modules structuraux du
+maître d'ouvrage, §8.5). Décidé avec Henri : se limiter à la paroi de pieux sécants, pas
+d'extension du CDC à d'autres types d'ouvrages non documentés (palplanches, paroi moulée…).
+
+**Citation CDC §8.5** : « vérification du recouvrement en fonction du diamètre, de l'entraxe
+et de la tolérance de verticalité. Le recouvrement décroît avec la profondeur du fait de la
+dérive des forages, ce qui conditionne l'étanchéité et la continuité mécanique. Calcul de
+l'inertie équivalente de la section composite pieux primaires et secondaires. »
+
+**Décisions :**
+- Tolérance de verticalité : **saisie directe** par l'ingénieur (déviation sans unité, ex.
+  0.01 = 1% = dérive de 1 cm par mètre de profondeur — valeur d'exécution réelle du forage),
+  même principe déjà retenu pour `kh` (paroi phasée) et `Rc;calc` (pieux) : pas de coefficient
+  normatif inventé.
+- Recouvrement minimal requis (seuil d'étanchéité) : **saisie directe** aussi — c'est une
+  exigence projet-spécifique (cahier des charges d'étanchéité), pas une valeur normative
+  universelle.
+- Inertie composite : calcul géométrique de premier principe (théorème de Huygens/axes
+  parallèles) par **superposition des sections circulaires pleines** primaire + secondaire,
+  **sans soustraire la lentille de recouvrement** — approximation documentée et signalée
+  (`approximationSuperposition: true`), dans le même esprit que l'absence de réduction de
+  voûte pour la Berlinoise. Pas d'invention de méthode plus fine sans référence fournie.
+- Architecture : même principe que la Berlinoise — module séparé de post-traitement,
+  `pieuxSecants.ts`, ne touchant ni `solveurPoutreRessorts.ts` ni `paroiPhasee.ts`.
+- Rigidité smeared (E/I/A du Niveau 2) : le matériau est du **béton** comme la paroi continue
+  (pas de l'acier comme la Berlinoise) — réutilise le champ `moduleE_GPa` déjà existant dans
+  `OngletParoiPhasee.tsx`, seuls `I`/`A` diffèrent (composite au lieu de dalle pleine).
+- Persistance : intégrée dès l'écriture, dans le même `useEffect` de synchronisation déjà en
+  place (Réserve 2 de la revue Berlinoise, résolue le 2026-09-21) — pas de dette technique
+  ajoutée.
+
+### 1. Types (`src/types/geotech.ts`)
+Ajouter sur `OuvrageSoutenement`, à côté de `parametresBerlinoise` (le champ `sousType`
+inclut déjà `'pieuxSecants'` depuis la spec Berlinoise — juste le sous-objet à ajouter) :
+```ts
+parametresPieuxSecants?: {
+  diametrePrimaire: number;        // m
+  diametreSecondaire: number;      // m
+  entraxe: number;                 // m, axe à axe pieu primaire ↔ secondaire adjacent
+  deviationVerticaliteMax: number; // sans unité (pente), ex 0.01 = 1% — saisie directe
+  recouvrementMinimalRequis: number; // m — seuil d'étanchéité/continuité, saisie directe
+};
+```
+
+### 2. Moteur (`src/modules/soutenement/pieuxSecants.ts`, nouveau fichier)
+
+**Fonction 1 — recouvrement.**
+```ts
+export interface ParametresRecouvrementPieuxSecants {
+  diametrePrimaire: number;        // m
+  diametreSecondaire: number;      // m
+  entraxe: number;                 // m
+  deviationVerticaliteMax: number; // sans unité (pente)
+  recouvrementMinimalRequis: number; // m
+}
+
+export interface ResultatRecouvrementPieuxSecants {
+  recouvrementSurface: number;       // m, recouvrement nominal en tête (z=0)
+  recouvrementProfondeurMax: number; // m, recouvrement au point le plus défavorable (pied)
+  conforme: boolean;
+  continuiteMecaniqueRompue: boolean; // true si recouvrementProfondeurMax <= 0
+}
+
+/**
+ * Recouvrement géométrique entre deux cercles de diamètres Dp/Ds séparés par l'entraxe e :
+ * (Dp+Ds)/2 - e (somme des rayons moins la distance entre centres). La dérive de forage
+ * (déviation de verticalité, saisie directe) écarte les deux axes avec la profondeur — pire
+ * cas retenu : les deux forages dérivent en sens opposés, dérive cumulée = 2 × déviation × z.
+ */
+export function verifierRecouvrementPieuxSecants(
+  parametres: ParametresRecouvrementPieuxSecants,
+  profondeurMax: number // m, hauteur totale des pieux (coteTete - coteBase)
+): ResultatRecouvrementPieuxSecants {
+  const rayonsCumules = (parametres.diametrePrimaire + parametres.diametreSecondaire) / 2;
+  const deriveMax = 2 * parametres.deviationVerticaliteMax * profondeurMax;
+  const entraxeEffectifMax = parametres.entraxe + deriveMax;
+
+  const recouvrementSurface = rayonsCumules - parametres.entraxe;
+  const recouvrementProfondeurMax = rayonsCumules - entraxeEffectifMax;
+  const continuiteMecaniqueRompue = recouvrementProfondeurMax <= 0;
+  const conforme =
+    !continuiteMecaniqueRompue && recouvrementProfondeurMax >= parametres.recouvrementMinimalRequis;
+
+  return { recouvrementSurface, recouvrementProfondeurMax, conforme, continuiteMecaniqueRompue };
+}
+```
+
+**Fonction 2 — inertie composite.**
+```ts
+export interface ParametresCompositePieuxSecants {
+  diametrePrimaire: number; // m
+  diametreSecondaire: number; // m
+  entraxe: number; // m
+}
+
+export interface ResultatInertieCompositePieuxSecants {
+  I_m4ParM: number; // m⁴/m — pour ParametresParoiPhasee.I (Niveau 2)
+  A_m2ParM: number; // m²/m — pour ParametresParoiPhasee.A
+  approximationSuperposition: true;
+}
+
+/**
+ * Inertie équivalente de la section composite (théorème des axes parallèles), motif
+ * répétitif = un pieu primaire + un pieu secondaire adjacent, par superposition des deux
+ * sections circulaires PLEINES sans soustraire leur lentille de recouvrement commune —
+ * approximation documentée (voûte non traitée non plus pour la Berlinoise, même principe :
+ * pas de méthode de référence disponible pour une section composite exacte).
+ */
+export function calculerInertieCompositePieuxSecants(
+  parametres: ParametresCompositePieuxSecants
+): ResultatInertieCompositePieuxSecants {
+  const { diametrePrimaire: Dp, diametreSecondaire: Ds, entraxe } = parametres;
+  const Ap = (Math.PI * Dp * Dp) / 4;
+  const As = (Math.PI * Ds * Ds) / 4;
+  const Ip = (Math.PI * Dp ** 4) / 64;
+  const Is = (Math.PI * Ds ** 4) / 64;
+
+  // Centre de gravité du motif (primaire en x=0, secondaire en x=entraxe)
+  const centreGravite = (Ap * 0 + As * entraxe) / (Ap + As);
+  const dp = centreGravite;
+  const ds = entraxe - centreGravite;
+
+  const I_total = Ip + Ap * dp ** 2 + (Is + As * ds ** 2);
+  const A_total = Ap + As;
+
+  return {
+    I_m4ParM: I_total / entraxe,
+    A_m2ParM: A_total / entraxe,
+    approximationSuperposition: true,
+  };
+}
+```
+
+### 3. Tests d'acceptation (`src/validation/acceptanceTestsSoutenement.ts`)
+- `T_PSEC.1` — recouvrement, 3 sous-cas calculés à la main : Dp=Ds=0.8 m, entraxe=0.65 m,
+  profondeurMax=10 m. (a) déviation=0.005 → recouvrementSurface=0.15 m,
+  recouvrementProfondeurMax=0.05 m, seuil=0.03 m → conforme. (b) même géométrie, seuil=0.08 m
+  → non conforme (recouvrement insuffisant mais continuité pas rompue). (c) déviation=0.02 →
+  recouvrementProfondeurMax=-0.25 m → continuité mécanique rompue, non conforme quel que soit
+  le seuil.
+- `T_PSEC.2` — inertie composite, cas symétrique Dp=Ds=0.8 m, entraxe=0.65 m (centre de
+  gravité exactement à l'entraxe/2 par symétrie) : valeur analytique calculée à la main dans
+  le test à partir de la même formule que le moteur, pour vérifier la non-régression de
+  l'implémentation plutôt que sa dérivation (cf. remarque §5 ci-dessous sur les tests
+  d'inertie).
+
+### 4. Intégration UI (`OngletParoiPhasee.tsx`)
+- Élargir le type local `sousType` de `'continue' | 'berlinoise'` à
+  `'continue' | 'berlinoise' | 'pieuxSecants'`, 3ᵉ bouton dans le sélecteur existant.
+- Nouveaux champs d'état : `diametrePrimaire`, `diametreSecondaire`, `entraxePieux` (nom
+  distinct de `entraxeProfiles` Berlinoise, même s'ils ne coexistent jamais dans l'UI, pour
+  éviter toute confusion de code), `deviationVerticaliteMax`, `recouvrementMinimalRequis`.
+- Branche `E_kPa`/`I_m4`/`A_m2` (déjà conditionnelle sur `sousType==='berlinoise'`) : ajouter
+  la branche `pieuxSecants` — `E_kPa = moduleE_GPa * 1e6` (comme `continue`, béton),
+  `I_m4`/`A_m2` = sortie de `calculerInertieCompositePieuxSecants`.
+- Nouveau `useMemo` `surcouchePieuxSecants` (miroir de `surcoucheBerlinoise`), calcule
+  `verifierRecouvrementPieuxSecants` à partir de `coteTete - coteBase` comme `profondeurMax`.
+- Panneau de saisie conditionnel (miroir du panneau Berlinoise) + carte de résultats (miroir
+  de la carte Berlinoise, badge rouge si `continuiteMecaniqueRompue`).
+- `useEffect` de synchronisation existant (persistance) : ajouter `parametresPieuxSecants`
+  dans l'objet `OuvrageSoutenement` construit quand `sousType==='pieuxSecants'`, et les
+  nouveaux champs d'état à son tableau de dépendances.
+
+### 5. Remarque sur la couverture de test de l'inertie composite
+Contrairement à `T_BERL.1`-`T_BERL.4` (dont les valeurs attendues sont dérivées indépendamment
+de la formule testée — ex. Hc=4cu/γ, poutre simplement appuyée), l'inertie composite n'a pas
+de solution de référence externe alternative simple à calculer à la main autrement qu'en
+répliquant la même formule des axes parallèles. `T_PSEC.2` est donc un test de
+**non-régression** (fige le résultat numérique une fois vérifié une fois à la main lors de
+l'implémentation), pas une preuve d'exactitude indépendante comme les autres tests de cette
+suite — limite à documenter explicitement dans la description du test lui-même.
+
+### 6. Vérifications
+- `npx tsc --noEmit`, `npm run test:acceptance` (37/37 attendu : 35 + T_PSEC.1 + T_PSEC.2),
+  `npm run build`.
+- Vérification manuelle en navigateur (Chromium disponible dans ce sandbox) : bascule vers
+  Pieux Sécants, saisie des paramètres, carte de résultats cohérente, export JSON + rechargement
+  pour confirmer la persistance (même méthode que pour la Réserve 2).
+
+
 ## Prochaines étapes (selon plan)
 
 1. **Surcouche Berlinoise (§8.5)** — **close** : implémentée, testée (35/35), revue, vérifiée
