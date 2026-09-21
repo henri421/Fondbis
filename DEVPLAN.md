@@ -1842,6 +1842,32 @@ ici est un palliatif local, documenté comme tel dans le code et dans le message
 **Verdict : accepté**, sous réserve de la vérification visuelle (Réserve 1) par Henri à
 l'occasion de la prochaine ouverture de l'app.
 
+## Merge avec la correction upstream du solveur (Cause 2) (2026-09-21, Claude)
+
+Au moment de pousser la revue ci-dessus, `git push` a été rejeté : une autre session (très
+probablement Gemini, sur la tâche "Correction définitive du solveur (Cause 2)" déjà
+spécifiée plus haut) avait entre-temps poussé `82ce1e6` — filtrage des étiquettes dans les
+schémas + **correction du solveur** : seuil de pivot relatif à l'échelle de la matrice
+(`solveurPoutreRessorts.ts`), détection explicite de mécanisme/rupture passive (déplacement
+borné, `convergence.convergé=false`, avertissement explicite au lieu d'un nombre à 10+
+chiffres silencieux), et propagation dans `calculerParoiPhasee` (nouveau test `T_PHASE.4`).
+
+Merge fait avec `git merge origin/main` : conflit texte-à-texte uniquement dans
+`acceptanceTestsSoutenement.ts` (insertions concurrentes au même endroit du fichier —
+`T_PHASE.4` d'un côté, `T_BERL.1-4` de l'autre), résolu en gardant les deux blocs de tests
+intacts. `OngletParoiPhasee.tsx` (touché par les deux côtés — filtrage d'étiquettes vs UI
+Berlinoise) a fusionné automatiquement sans conflit, zones non chevauchantes.
+
+**Correction du garde-fou local en conséquence** : maintenant que
+`resultatSolveur.convergence.convergé` est un signal fiable, `verifierFicheProfileReduite`
+dans `berlinoise.ts` s'appuie directement dessus (`gardeFouDeclenche = !solveurConverge`) au
+lieu de sa propre heuristique déplacement/mobilisation-butée — signature simplifiée (retrait
+de `mobilisationButeeMaxPhase` et `hauteurTotaleOuvrage`, devenus inutiles), `T_BERL.4` mis à
+jour en conséquence. La tâche "Correction définitive du solveur (Cause 2)" ci-dessous est
+donc désormais **résolue**, pas seulement contournée localement.
+
+**Vérifié après merge** : `tsc --noEmit` propre, `npm run build` propre,
+`npm run test:acceptance` à **35/35 (100%)** (34 + `T_PHASE.4`).
 
 ## Prochaines étapes (selon plan)
 
@@ -1849,10 +1875,10 @@ l'occasion de la prochaine ouverture de l'app.
    Reste : vérification visuelle par Henri dans un vrai navigateur (Réserve 1 de la revue),
    non faite faute d'outillage navigateur dans le sandbox d'implémentation.
 2. **Surcouche pieux sécants (§8.5)** — pas encore spécifiée, à faire après la berlinoise.
-3. **Correction définitive du solveur (Cause 2)** — garde-fou local posé dans la surcouche
-   Berlinoise en attendant, mais la correction dans `solveurPoutreRessorts.ts` reste due
-   (tâche déjà spécifiée plus haut), en particulier avant de construire la surcouche pieux
-   sécants dessus.
+   Peut maintenant s'appuyer sur un solveur robuste (Cause 2 résolue, voir merge ci-dessus).
+3. ~~**Correction définitive du solveur (Cause 2)**~~ — **résolue** par `82ce1e6` (upstream)
+   + merge ci-dessus. Le garde-fou local de la surcouche Berlinoise s'appuie maintenant sur
+   ce signal plutôt que de le dupliquer.
 4. **Groupe de pieux (§7.6)** : a priori clos après la revue précédente (Converse-Labarre
    vérifié à la main) — reconfirmer si un point spécifique est soulevé par Henri.
 5. **Dérivation CPT/PMT automatique (§7.4)**, si un jour souhaitée en complément de la saisie

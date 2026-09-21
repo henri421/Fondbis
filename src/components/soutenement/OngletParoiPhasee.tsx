@@ -33,7 +33,30 @@ import {
   Activity,
   CheckCircle2,
   Download,
+  Tag,
+  ChevronDown,
 } from 'lucide-react';
+import { BoiteEtiquette1D, BoiteEtiquetteResolue, resoudreAntiCollision1D } from '../../core/antiCollisionEtiquettes';
+
+export type TypeEtiquetteParoi =
+  | 'cotesElevation'
+  | 'fondFouille'
+  | 'appuis'
+  | 'extremums'
+  | 'zones';
+
+const TYPES_ETIQUETTES_PAROI_CONFIG: {
+  id: TypeEtiquetteParoi;
+  label: string;
+  dotColor: string;
+  description: string;
+}[] = [
+  { id: 'cotesElevation', label: 'Cotes élévation', dotColor: 'bg-slate-500', description: 'Cotes altimétriques de la paroi (axe Y)' },
+  { id: 'fondFouille', label: 'Fond de fouille', dotColor: 'bg-rose-500', description: 'Ligne et cote du fond de fouille de la phase active' },
+  { id: 'appuis', label: 'Appuis', dotColor: 'bg-amber-500', description: 'Libellés et cotes des butons et tirants' },
+  { id: 'extremums', label: 'Extrémums', dotColor: 'bg-sky-500', description: 'Valeurs numériques max et min des courbes' },
+  { id: 'zones', label: 'Zones', dotColor: 'bg-indigo-500', description: 'Indications textuelles Amont et Fiche' },
+];
 
 interface OngletParoiPhaseeProps {
   modele: ModeleTerrain;
@@ -97,6 +120,43 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
   const [diagrammeAffiche, setDiagrammeAffiche] = useState<
     'tous' | 'deformee' | 'moment' | 'tranchant' | 'pressions'
   >('tous');
+
+  // Filtrage et masquage des types d'étiquettes du diagramme
+  const [filtreEtiquettesOuvert, setFiltreEtiquettesOuvert] = useState(false);
+  const [visibilitesEtiquettes, setVisibilitesEtiquettes] = useState<Record<TypeEtiquetteParoi, boolean>>({
+    cotesElevation: true,
+    fondFouille: true,
+    appuis: true,
+    extremums: true,
+    zones: true,
+  });
+
+  const toggleTypeEtiquette = (type: TypeEtiquetteParoi) => {
+    setVisibilitesEtiquettes((prev) => ({ ...prev, [type]: !prev[type] }));
+  };
+
+  const toutMasquerEtiquettes = () => {
+    setVisibilitesEtiquettes({
+      cotesElevation: false,
+      fondFouille: false,
+      appuis: false,
+      extremums: false,
+      zones: false,
+    });
+  };
+
+  const toutAfficherEtiquettes = () => {
+    setVisibilitesEtiquettes({
+      cotesElevation: true,
+      fondFouille: true,
+      appuis: true,
+      extremums: true,
+      zones: true,
+    });
+  };
+
+  const nbActivesParoi = Object.values(visibilitesEtiquettes).filter(Boolean).length;
+  const totalTypesParoi = TYPES_ETIQUETTES_PAROI_CONFIG.length;
 
   // Phases d'excavation configurables
   const [phases, setPhases] = useState<PhaseParoi[]>(() => {
@@ -249,8 +309,7 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
         resultatCalcul,
         parametres,
         modele.couches,
-        modele.configurationNormative,
-        coteTete - coteBase
+        modele.configurationNormative
       );
     } catch (e) {
       console.error('Erreur lors du calcul de la surcouche Berlinoise :', e);
@@ -268,8 +327,6 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
     blindageContrainteAdm,
     modele.couches,
     modele.configurationNormative,
-    coteTete,
-    coteBase,
   ]);
 
   const phaseBerlinoiseCourante: ResultatSurcoucheBerlinoisePhase | null =
@@ -415,26 +472,35 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
         {/* Barre de navigation des phases */}
         <div className="mt-3 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-            {phases.map((p, idx) => (
-              <button
-                key={p.numero}
-                type="button"
-                onClick={() => {
-                  setVueEnveloppe(false);
-                  setPhaseActiveIndex(idx);
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
-                  !vueEnveloppe && phaseActiveIndex === idx
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <span>Phase {p.numero}</span>
-                <span className="text-[10px] opacity-80">
-                  (fond {p.coteFondFouille.toFixed(1)}m)
-                </span>
-              </button>
-            ))}
+            {phases.map((p, idx) => {
+              const resP = resultatCalcul?.phases[idx];
+              const nonConverge = resP && !resP.resultatSolveur.convergence.convergé;
+              return (
+                <button
+                  key={p.numero}
+                  type="button"
+                  onClick={() => {
+                    setVueEnveloppe(false);
+                    setPhaseActiveIndex(idx);
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
+                    !vueEnveloppe && phaseActiveIndex === idx
+                      ? nonConverge
+                        ? 'bg-rose-600 text-white shadow-xs'
+                        : 'bg-emerald-600 text-white shadow-xs'
+                      : nonConverge
+                        ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {nonConverge && <AlertTriangle className="w-3.5 h-3.5 text-current shrink-0" />}
+                  <span>Phase {p.numero}</span>
+                  <span className="text-[10px] opacity-80">
+                    (fond {p.coteFondFouille.toFixed(1)}m)
+                  </span>
+                </button>
+              );
+            })}
 
             <button
               type="button"
@@ -463,22 +529,45 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
 
       {/* 2. Métriques clés et alertes de la phase visualisée */}
       {resultatCalcul && phaseCourante && (
-        <div className={`grid grid-cols-2 ${verifRenard ? 'sm:grid-cols-3 lg:grid-cols-5' : 'sm:grid-cols-4'} gap-3`}>
-          {/* Déplacement max */}
-          <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-              Déplacement max u_max
-            </span>
-            <div className="mt-1 flex items-baseline gap-1.5">
-              <span className="text-xl font-black text-sky-900">
-                {(phaseCourante.deplacementMaxAbsolu * 1000).toFixed(1)}
-              </span>
-              <span className="text-xs text-slate-500 font-semibold">mm</span>
+        <div className="space-y-3">
+          <div className={`grid grid-cols-2 ${verifRenard ? 'sm:grid-cols-3 lg:grid-cols-5' : 'sm:grid-cols-4'} gap-3`}>
+            {/* Déplacement max */}
+            <div
+              className={`p-3 border rounded-xl shadow-xs transition ${
+                !phaseCourante.resultatSolveur.convergence.convergé
+                  ? 'bg-rose-50/90 border-rose-300 text-rose-950'
+                  : 'bg-white border-slate-200'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                  Déplacement max u_max
+                </span>
+                {!phaseCourante.resultatSolveur.convergence.convergé && (
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                )}
+              </div>
+              <div className="mt-1 flex items-baseline gap-1.5 flex-wrap">
+                <span
+                  className={`text-xl font-black ${
+                    !phaseCourante.resultatSolveur.convergence.convergé ? 'text-rose-700' : 'text-sky-900'
+                  }`}
+                >
+                  {(phaseCourante.deplacementMaxAbsolu * 1000).toFixed(1)}
+                </span>
+                <span className="text-xs text-slate-500 font-semibold">mm</span>
+                {!phaseCourante.resultatSolveur.convergence.convergé && (
+                  <span className="text-[10px] font-bold text-rose-600 ml-1">
+                    (Non convergé)
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 text-[10px] text-slate-500">
+                {!phaseCourante.resultatSolveur.convergence.convergé
+                  ? 'Mécanisme / capacité passive dépassée'
+                  : 'Déformée horizontale vers la fouille'}
+              </div>
             </div>
-            <div className="mt-1 text-[10px] text-slate-500">
-              Déformée horizontale vers la fouille
-            </div>
-          </div>
 
           {/* Moment fléchissant max */}
           <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-xs">
@@ -631,7 +720,42 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
             </div>
           )}
         </div>
-      )}
+
+        {/* Bannière d'alerte explicite en cas d'instabilité, mécanisme ou avertissements solveur */}
+        {(!phaseCourante.resultatSolveur.convergence.convergé ||
+          phaseCourante.resultatSolveur.convergence.avertissements.length > 0) && (
+          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 flex items-start gap-3 shadow-xs">
+            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-bold text-rose-950 text-sm flex items-center gap-2">
+                <span>
+                  {!phaseCourante.resultatSolveur.convergence.convergé
+                    ? 'Alerte Géotechnique : Non-convergence ou mécanisme de rupture'
+                    : 'Avertissements du solveur'}
+                </span>
+                {!phaseCourante.resultatSolveur.convergence.convergé && (
+                  <span className="px-2 py-0.5 text-[10px] bg-rose-200 text-rose-800 font-bold rounded-full">
+                    Mécanisme instable
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 text-rose-800 font-medium leading-relaxed">
+                {phaseCourante.resultatSolveur.convergence.message}
+              </div>
+              {phaseCourante.resultatSolveur.convergence.avertissements.length > 0 && (
+                <ul className="mt-2 list-disc list-inside space-y-1 text-rose-800">
+                  {phaseCourante.resultatSolveur.convergence.avertissements.map((av, idx) => (
+                    <li key={idx} className="font-medium">
+                      {av}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )}
 
       {/* 3. Zone de Graphiques et Diagrammes Verticaux */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
@@ -645,54 +769,124 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center bg-slate-200/80 p-0.5 rounded-lg font-medium">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Bouton de filtrage des étiquettes */}
             <button
+              id="btn-toggle-etiquettes-paroi"
               type="button"
-              onClick={() => setDiagrammeAffiche('tous')}
-              className={`px-2.5 py-1 rounded-md transition ${
-                diagrammeAffiche === 'tous' ? 'bg-white text-slate-900 font-bold shadow-xs' : 'text-slate-600'
+              onClick={() => setFiltreEtiquettesOuvert((v) => !v)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition border ${
+                filtreEtiquettesOuvert
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold shadow-2xs'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200 font-medium'
               }`}
+              title="Masquer / Afficher les types d'étiquettes du diagramme"
             >
-              Vue d'ensemble
+              <Tag className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="hidden sm:inline">Étiquettes</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                {nbActivesParoi}/{totalTypesParoi}
+              </span>
+              <ChevronDown className={`w-3 h-3 transition-transform ${filtreEtiquettesOuvert ? 'rotate-180' : ''}`} />
             </button>
-            <button
-              type="button"
-              onClick={() => setDiagrammeAffiche('deformee')}
-              className={`px-2.5 py-1 rounded-md transition ${
-                diagrammeAffiche === 'deformee' ? 'bg-white text-sky-900 font-bold shadow-xs' : 'text-slate-600'
-              }`}
-            >
-              Déformée u(z)
-            </button>
-            <button
-              type="button"
-              onClick={() => setDiagrammeAffiche('moment')}
-              className={`px-2.5 py-1 rounded-md transition ${
-                diagrammeAffiche === 'moment' ? 'bg-white text-emerald-900 font-bold shadow-xs' : 'text-slate-600'
-              }`}
-            >
-              Moment M(z)
-            </button>
-            <button
-              type="button"
-              onClick={() => setDiagrammeAffiche('tranchant')}
-              className={`px-2.5 py-1 rounded-md transition ${
-                diagrammeAffiche === 'tranchant' ? 'bg-white text-amber-900 font-bold shadow-xs' : 'text-slate-600'
-              }`}
-            >
-              Tranchant V(z)
-            </button>
-            <button
-              type="button"
-              onClick={() => setDiagrammeAffiche('pressions')}
-              className={`px-2.5 py-1 rounded-md transition ${
-                diagrammeAffiche === 'pressions' ? 'bg-white text-purple-900 font-bold shadow-xs' : 'text-slate-600'
-              }`}
-            >
-              Pressions Pa/Pp
-            </button>
+
+            <div className="flex items-center bg-slate-200/80 p-0.5 rounded-lg font-medium">
+              <button
+                type="button"
+                onClick={() => setDiagrammeAffiche('tous')}
+                className={`px-2.5 py-1 rounded-md transition ${
+                  diagrammeAffiche === 'tous' ? 'bg-white text-slate-900 font-bold shadow-xs' : 'text-slate-600'
+                }`}
+              >
+                Vue d'ensemble
+              </button>
+              <button
+                type="button"
+                onClick={() => setDiagrammeAffiche('deformee')}
+                className={`px-2.5 py-1 rounded-md transition ${
+                  diagrammeAffiche === 'deformee' ? 'bg-white text-sky-900 font-bold shadow-xs' : 'text-slate-600'
+                }`}
+              >
+                Déformée u(z)
+              </button>
+              <button
+                type="button"
+                onClick={() => setDiagrammeAffiche('moment')}
+                className={`px-2.5 py-1 rounded-md transition ${
+                  diagrammeAffiche === 'moment' ? 'bg-white text-emerald-900 font-bold shadow-xs' : 'text-slate-600'
+                }`}
+              >
+                Moment M(z)
+              </button>
+              <button
+                type="button"
+                onClick={() => setDiagrammeAffiche('tranchant')}
+                className={`px-2.5 py-1 rounded-md transition ${
+                  diagrammeAffiche === 'tranchant' ? 'bg-white text-amber-900 font-bold shadow-xs' : 'text-slate-600'
+                }`}
+              >
+                Tranchant V(z)
+              </button>
+              <button
+                type="button"
+                onClick={() => setDiagrammeAffiche('pressions')}
+                className={`px-2.5 py-1 rounded-md transition ${
+                  diagrammeAffiche === 'pressions' ? 'bg-white text-purple-900 font-bold shadow-xs' : 'text-slate-600'
+                }`}
+              >
+                Pressions Pa/Pp
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Panneau de sélection des types d'étiquettes à afficher ou masquer */}
+        {filtreEtiquettesOuvert && (
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 bg-slate-100/90 border-b border-slate-200 text-xs animate-fadeIn">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-semibold text-slate-500 mr-1">Types d'étiquettes :</span>
+              {TYPES_ETIQUETTES_PAROI_CONFIG.map((cfg) => {
+                const estActif = visibilitesEtiquettes[cfg.id];
+                return (
+                  <button
+                    key={cfg.id}
+                    id={`chip-etiquette-paroi-${cfg.id}`}
+                    type="button"
+                    onClick={() => toggleTypeEtiquette(cfg.id)}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition border ${
+                      estActif
+                        ? 'bg-white text-slate-800 border-slate-300 shadow-2xs'
+                        : 'bg-slate-200/70 text-slate-400 border-dashed border-slate-300 line-through opacity-70'
+                    }`}
+                    title={`${estActif ? 'Masquer' : 'Afficher'} : ${cfg.description}`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${estActif ? cfg.dotColor : 'bg-slate-300'}`} />
+                    <span>{cfg.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-1.5 ml-auto">
+              <button
+                id="btn-masquer-toutes-etiquettes-paroi"
+                type="button"
+                onClick={toutMasquerEtiquettes}
+                className="text-[11px] text-slate-600 hover:text-slate-900 px-2 py-0.5 rounded hover:bg-slate-200 transition"
+              >
+                Tout masquer
+              </button>
+              <span className="text-slate-300">|</span>
+              <button
+                id="btn-afficher-toutes-etiquettes-paroi"
+                type="button"
+                onClick={toutAfficherEtiquettes}
+                className="text-[11px] text-emerald-700 hover:text-emerald-900 font-semibold px-2 py-0.5 rounded hover:bg-emerald-50 transition"
+              >
+                Tout afficher
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="p-4">
           {resultatCalcul && phaseCourante ? (
@@ -705,6 +899,7 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
               coteBase={coteBase}
               appuis={appuis}
               couches={modele.couches}
+              visibilitesEtiquettes={visibilitesEtiquettes}
             />
           ) : (
             <div className="py-12 text-center text-slate-400 text-xs">
@@ -1140,6 +1335,7 @@ interface RenduDiagrammesParoiProps {
   coteBase: number;
   appuis: AppuiPhase[];
   couches: CoucheGeotechnique[];
+  visibilitesEtiquettes: Record<TypeEtiquetteParoi, boolean>;
 }
 
 const RenduDiagrammesParoi: React.FC<RenduDiagrammesParoiProps> = ({
@@ -1151,6 +1347,7 @@ const RenduDiagrammesParoi: React.FC<RenduDiagrammesParoiProps> = ({
   coteBase,
   appuis,
   couches,
+  visibilitesEtiquettes,
 }) => {
   // Dimensions du canvas SVG
   const width = 800;
@@ -1166,6 +1363,35 @@ const RenduDiagrammesParoi: React.FC<RenduDiagrammesParoiProps> = ({
   const yDeCote = (cote: number) => {
     return marginTop + ((coteTete - cote) / hauteurTotale) * plotHeight;
   };
+
+  // Calcul de la résolution anti-collision des étiquettes d'appuis (butons / tirants)
+  const appuisActifs = useMemo(() => {
+    return appuis.filter((app) => app.phaseActivation <= phaseActive.phase.numero);
+  }, [appuis, phaseActive.phase.numero]);
+
+  const appuisResolusMap = useMemo(() => {
+    const boites: BoiteEtiquette1D[] = appuisActifs.map((app) => {
+      const yApp = yDeCote(app.cote);
+      return {
+        id: app.id,
+        yIdeal: yApp - 7,
+        hauteur: 14,
+        yAnchor: yApp,
+        donnees: app,
+      };
+    });
+    const resolues = resoudreAntiCollision1D(
+      boites,
+      marginTop + 5,
+      height - marginBottom - 15,
+      4
+    );
+    const map = new Map<string, BoiteEtiquetteResolue>();
+    for (const b of resolues) {
+      map.set(b.id, b);
+    }
+    return map;
+  }, [appuisActifs, coteTete, hauteurTotale, plotHeight]);
 
   // Nœuds et cotes
   const cotes = resultat.cotes;
@@ -1265,16 +1491,18 @@ const RenduDiagrammesParoi: React.FC<RenduDiagrammesParoiProps> = ({
             return (
               <g key={frac}>
                 <line x1={40} y1={y} x2={width - 20} y2={y} />
-                <text
-                  x={36}
-                  y={y + 3}
-                  textAnchor="end"
-                  fill="#64748b"
-                  fontSize="10"
-                  fontFamily="monospace"
-                >
-                  {cote.toFixed(1)}m
-                </text>
+                {visibilitesEtiquettes.cotesElevation && (
+                  <text
+                    x={36}
+                    y={y + 3}
+                    textAnchor="end"
+                    fill="#64748b"
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    {cote.toFixed(1)}m
+                  </text>
+                )}
               </g>
             );
           })}
@@ -1291,16 +1519,18 @@ const RenduDiagrammesParoi: React.FC<RenduDiagrammesParoiProps> = ({
             strokeWidth="1.5"
             strokeDasharray="4 2"
           />
-          <text
-            x={width - 25}
-            y={yDeCote(coteFondActive) - 5}
-            textAnchor="end"
-            fill="#e11d48"
-            fontSize="10"
-            fontWeight="bold"
-          >
-            Fond de fouille ({coteFondActive.toFixed(1)} m)
-          </text>
+          {visibilitesEtiquettes.fondFouille && (
+            <text
+              x={width - 25}
+              y={yDeCote(coteFondActive) - 5}
+              textAnchor="end"
+              fill="#e11d48"
+              fontSize="10"
+              fontWeight="bold"
+            >
+              Fond de fouille ({coteFondActive.toFixed(1)} m)
+            </text>
+          )}
         </g>
 
         {/* Rendu par colonne */}
@@ -1355,16 +1585,18 @@ const RenduDiagrammesParoi: React.FC<RenduDiagrammesParoiProps> = ({
                     fill="#f1f5f9"
                     opacity="0.7"
                   />
-                  <text
-                    x={centerX - 30}
-                    y={yDeCote(coteTete) + 15}
-                    textAnchor="middle"
-                    fill="#64748b"
-                    fontSize="9"
-                    fontWeight="bold"
-                  >
-                    AMONT
-                  </text>
+                  {visibilitesEtiquettes.zones && (
+                    <text
+                      x={centerX - 30}
+                      y={yDeCote(coteTete) + 15}
+                      textAnchor="middle"
+                      fill="#64748b"
+                      fontSize="9"
+                      fontWeight="bold"
+                    >
+                      AMONT
+                    </text>
+                  )}
 
                   {/* Côté aval (sol en fiche sous fond de fouille) */}
                   <rect
@@ -1375,16 +1607,18 @@ const RenduDiagrammesParoi: React.FC<RenduDiagrammesParoiProps> = ({
                     fill="#e2e8f0"
                     opacity="0.7"
                   />
-                  <text
-                    x={centerX + 30}
-                    y={yDeCote(coteFondActive) + 15}
-                    textAnchor="middle"
-                    fill="#64748b"
-                    fontSize="9"
-                    fontWeight="bold"
-                  >
-                    FICHE
-                  </text>
+                  {visibilitesEtiquettes.zones && (
+                    <text
+                      x={centerX + 30}
+                      y={yDeCote(coteFondActive) + 15}
+                      textAnchor="middle"
+                      fill="#64748b"
+                      fontSize="9"
+                      fontWeight="bold"
+                    >
+                      FICHE
+                    </text>
+                  )}
 
                   {/* Fouille excavée */}
                   <rect
@@ -1396,30 +1630,48 @@ const RenduDiagrammesParoi: React.FC<RenduDiagrammesParoiProps> = ({
                     opacity="0.5"
                   />
 
-                  {/* Butons / Tirants actifs */}
-                  {appuis.map((app) => {
-                    if (app.phaseActivation > phaseActive.phase.numero) return null;
+                  {/* Butons / Tirants actifs avec anti-collision et ligne guide */}
+                  {appuisActifs.map((app) => {
                     const yApp = yDeCote(app.cote);
+                    const resolue = appuisResolusMap.get(app.id);
+                    const yLabel = resolue ? resolue.yCalcule + 10 : yApp + 3;
+                    const decalee = resolue?.decalee ?? false;
+
                     return (
                       <g key={app.id}>
                         <circle cx={centerX} cy={yApp} r="4" fill="#d97706" />
                         <line
                           x1={centerX}
                           y1={yApp}
-                          x2={centerX + 35}
+                          x2={centerX + 32}
                           y2={yApp}
                           stroke="#d97706"
                           strokeWidth="2"
                         />
-                        <text
-                          x={centerX + 38}
-                          y={yApp + 3}
-                          fill="#d97706"
-                          fontSize="9"
-                          fontWeight="bold"
-                        >
-                          {app.type === 'buton' ? 'Buton' : 'Tirant'}
-                        </text>
+                        {visibilitesEtiquettes.appuis && (
+                          <g>
+                            {decalee && (
+                              <line
+                                x1={centerX + 32}
+                                y1={yApp}
+                                x2={centerX + 36}
+                                y2={yLabel - 3}
+                                stroke="#d97706"
+                                strokeWidth="1"
+                                strokeDasharray="2 2"
+                              />
+                            )}
+                            <text
+                              x={centerX + 38}
+                              y={yLabel}
+                              fill="#d97706"
+                              fontSize="9"
+                              fontWeight="bold"
+                            >
+                              {app.type === 'buton' ? 'Buton' : 'Tirant'} ({app.cote.toFixed(1)} m)
+                            </text>
+                          </g>
+                        )}
                       </g>
                     );
                   })}
@@ -1451,26 +1703,30 @@ const RenduDiagrammesParoi: React.FC<RenduDiagrammesParoiProps> = ({
                   />
 
                   {/* Valeurs extrêmes */}
-                  <text
-                    x={centerX + (col.width * 0.4)}
-                    y={height - 10}
-                    textAnchor="end"
-                    fill="#0284c7"
-                    fontSize="9"
-                    fontWeight="bold"
-                  >
-                    +{(maxUx * 1000).toFixed(1)} mm
-                  </text>
-                  <text
-                    x={centerX - (col.width * 0.4)}
-                    y={height - 10}
-                    textAnchor="start"
-                    fill="#0284c7"
-                    fontSize="9"
-                    fontWeight="bold"
-                  >
-                    -{(maxUx * 1000).toFixed(1)} mm
-                  </text>
+                  {visibilitesEtiquettes.extremums && (
+                    <>
+                      <text
+                        x={centerX + (col.width * 0.4)}
+                        y={height - 10}
+                        textAnchor="end"
+                        fill="#0284c7"
+                        fontSize="9"
+                        fontWeight="bold"
+                      >
+                        +{(maxUx * 1000).toFixed(1)} mm
+                      </text>
+                      <text
+                        x={centerX - (col.width * 0.4)}
+                        y={height - 10}
+                        textAnchor="start"
+                        fill="#0284c7"
+                        fontSize="9"
+                        fontWeight="bold"
+                      >
+                        -{(maxUx * 1000).toFixed(1)} mm
+                      </text>
+                    </>
+                  )}
                 </g>
               )}
 
@@ -1496,26 +1752,30 @@ const RenduDiagrammesParoi: React.FC<RenduDiagrammesParoiProps> = ({
                     strokeWidth="2.5"
                   />
 
-                  <text
-                    x={centerX + (col.width * 0.4)}
-                    y={height - 10}
-                    textAnchor="end"
-                    fill="#16a34a"
-                    fontSize="9"
-                    fontWeight="bold"
-                  >
-                    +{maxM.toFixed(0)} kNm/m
-                  </text>
-                  <text
-                    x={centerX - (col.width * 0.4)}
-                    y={height - 10}
-                    textAnchor="start"
-                    fill="#16a34a"
-                    fontSize="9"
-                    fontWeight="bold"
-                  >
-                    -{maxM.toFixed(0)}
-                  </text>
+                  {visibilitesEtiquettes.extremums && (
+                    <>
+                      <text
+                        x={centerX + (col.width * 0.4)}
+                        y={height - 10}
+                        textAnchor="end"
+                        fill="#16a34a"
+                        fontSize="9"
+                        fontWeight="bold"
+                      >
+                        +{maxM.toFixed(0)} kNm/m
+                      </text>
+                      <text
+                        x={centerX - (col.width * 0.4)}
+                        y={height - 10}
+                        textAnchor="start"
+                        fill="#16a34a"
+                        fontSize="9"
+                        fontWeight="bold"
+                      >
+                        -{maxM.toFixed(0)}
+                      </text>
+                    </>
+                  )}
                 </g>
               )}
 
@@ -1541,26 +1801,30 @@ const RenduDiagrammesParoi: React.FC<RenduDiagrammesParoiProps> = ({
                     strokeWidth="2.5"
                   />
 
-                  <text
-                    x={centerX + (col.width * 0.4)}
-                    y={height - 10}
-                    textAnchor="end"
-                    fill="#d97706"
-                    fontSize="9"
-                    fontWeight="bold"
-                  >
-                    +{maxV.toFixed(0)} kN/m
-                  </text>
-                  <text
-                    x={centerX - (col.width * 0.4)}
-                    y={height - 10}
-                    textAnchor="start"
-                    fill="#d97706"
-                    fontSize="9"
-                    fontWeight="bold"
-                  >
-                    -{maxV.toFixed(0)}
-                  </text>
+                  {visibilitesEtiquettes.extremums && (
+                    <>
+                      <text
+                        x={centerX + (col.width * 0.4)}
+                        y={height - 10}
+                        textAnchor="end"
+                        fill="#d97706"
+                        fontSize="9"
+                        fontWeight="bold"
+                      >
+                        +{maxV.toFixed(0)} kN/m
+                      </text>
+                      <text
+                        x={centerX - (col.width * 0.4)}
+                        y={height - 10}
+                        textAnchor="start"
+                        fill="#d97706"
+                        fontSize="9"
+                        fontWeight="bold"
+                      >
+                        -{maxV.toFixed(0)}
+                      </text>
+                    </>
+                  )}
                 </g>
               )}
 
@@ -1595,24 +1859,28 @@ const RenduDiagrammesParoi: React.FC<RenduDiagrammesParoiProps> = ({
                     strokeWidth="2"
                   />
 
-                  <text
-                    x={centerX - (col.width * 0.35)}
-                    y={30}
-                    fill="#3b82f6"
-                    fontSize="9"
-                    fontWeight="bold"
-                  >
-                    ← Poussée Pa
-                  </text>
-                  <text
-                    x={centerX + 10}
-                    y={30}
-                    fill="#ef4444"
-                    fontSize="9"
-                    fontWeight="bold"
-                  >
-                    Butée Pp →
-                  </text>
+                  {visibilitesEtiquettes.extremums && (
+                    <>
+                      <text
+                        x={centerX - (col.width * 0.35)}
+                        y={30}
+                        fill="#3b82f6"
+                        fontSize="9"
+                        fontWeight="bold"
+                      >
+                        ← Poussée Pa
+                      </text>
+                      <text
+                        x={centerX + 10}
+                        y={30}
+                        fill="#ef4444"
+                        fontSize="9"
+                        fontWeight="bold"
+                      >
+                        Butée Pp →
+                      </text>
+                    </>
+                  )}
                 </g>
               )}
             </g>

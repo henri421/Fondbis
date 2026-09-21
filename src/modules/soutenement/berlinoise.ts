@@ -101,18 +101,18 @@ export interface ResultatFicheReduite {
  * peut mobiliser la butée que sur sa propre largeur physique, pas sur toute la largeur
  * qu'occuperait un écran continu.
  *
- * Garde-fou local provisoire (PAS une correction du solveur partagé — cf. DEVPLAN, tâche
- * "Correction définitive du solveur (Cause 2)" toujours en attente) : si le déplacement de
- * la phase est déraisonnable ET que la butée globale est mobilisée à ~100%, on ne fait pas
- * confiance au résultat brut du solveur et on force un avertissement explicite.
+ * Garde-fou : s'appuie directement sur `resultatSolveur.convergence.convergé`, désormais
+ * fiable (le solveur détecte lui-même l'insuffisance de capacité passive / mécanisme — cf.
+ * DEVPLAN, tâche "Correction définitive du solveur (Cause 2)", corrigée en amont). On ne
+ * fait pas confiance au résultat de fiche si la phase elle-même n'a pas convergé : le moment
+ * et le déplacement remontés seraient ceux d'un mécanisme, pas d'un état d'équilibre réel.
  */
 export function verifierFicheProfileReduite(
   noeudsSousFiche: NoeudFicheBerlinoise[],
   entraxeProfiles: number,
   largeurProfile: number,
-  deplacementMaxPhase: number, // m
-  mobilisationButeeMaxPhase: number, // [0..1]
-  hauteurTotaleOuvrage: number // m
+  solveurConverge: boolean,
+  deplacementMaxPhase: number // m, pour le message uniquement
 ): ResultatFicheReduite {
   let demandeMax = 0;
   let capaciteReduiteMax = 0;
@@ -130,10 +130,7 @@ export function verifierFicheProfileReduite(
   }
 
   const conformeBrut = pireRatio <= 1.0;
-
-  const seuilDeplacementDeraisonnable = Math.max(1.0, hauteurTotaleOuvrage / 10);
-  const gardeFouDeclenche =
-    deplacementMaxPhase > seuilDeplacementDeraisonnable && mobilisationButeeMaxPhase >= 0.999;
+  const gardeFouDeclenche = !solveurConverge;
 
   return {
     demandeMax,
@@ -141,7 +138,7 @@ export function verifierFicheProfileReduite(
     conforme: gardeFouDeclenche ? false : conformeBrut,
     gardeFouDeclenche,
     avertissement: gardeFouDeclenche
-      ? `Résultat potentiellement non convergé (déplacement=${(deplacementMaxPhase * 1000).toFixed(0)} mm, butée mobilisée à 100%) — capacité passive possiblement insuffisante sur la largeur réduite du profilé. Voir DEVPLAN, tâche "Correction définitive du solveur (Cause 2)". Vérifier manuellement avant tout usage.`
+      ? `Le solveur Niveau 2 signale une non-convergence sur cette phase (déplacement=${(deplacementMaxPhase * 1000).toFixed(0)} mm) — capacité passive possiblement insuffisante, mécanisme potentiel. Fiche ou appuis à revoir avant tout usage.`
       : undefined,
   };
 }
@@ -162,8 +159,7 @@ export function calculerSurcoucheBerlinoise(
   resultat: ResultatCalculParoiPhasee,
   parametres: ParametresProfileBerlinoise,
   couches: CoucheGeotechnique[],
-  configurationNormative: ConfigurationNormative,
-  hauteurTotaleOuvrage: number
+  configurationNormative: ConfigurationNormative
 ): ResultatSurcoucheBerlinoisePhase[] {
   return resultat.phases.map((resultatPhase) => {
     const repartition = calculerRepartitionProfileBlindage(
@@ -209,9 +205,8 @@ export function calculerSurcoucheBerlinoise(
       noeudsSousFiche,
       parametres.entraxeProfiles,
       parametres.profile.largeur,
-      resultatPhase.deplacementMaxAbsolu,
-      resultatPhase.mobilisationButeeMax,
-      hauteurTotaleOuvrage
+      resultatPhase.resultatSolveur.convergence.convergé,
+      resultatPhase.deplacementMaxAbsolu
     );
 
     return { phase: resultatPhase.phase, repartition, stabiliteFront, resistanceBlindage, ficheReduite };
