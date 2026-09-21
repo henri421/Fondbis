@@ -2,5 +2,7 @@
   "name": "GeoTech EC7 - Calcul Géotechnique",
   "description": "Application PWA autonome de calcul géotechnique conforme à l'Eurocode 7 (EN 1997-1:2004). Modèle de sol unifié, fondations superficielles, pieux et soutènements.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ModeleTerrain, OuvrageRadier } from '../types/geotech';
 import { verifierPortanceRadierELU } from '../modules/radier/portanceELU';
-import { calculerTassementRadierELS } from '../modules/radier/tassementELS';
+import { calculerTassementRadierELS, calculerCourbeTassementCharge } from '../modules/radier/tassementELS';
 import { calculerRadierSurRessortsIteratifs } from '../modules/radier/radierSurRessortsIteratifs';
+import { GraphiqueCourbeTassement } from './radier/GraphiqueCourbeTassement';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -15,6 +16,7 @@ import {
   Copy,
   CheckCircle2,
   AlertCircle,
+  TrendingDown,
 } from 'lucide-react';
 
 interface OngletRadierProps {
@@ -24,6 +26,7 @@ interface OngletRadierProps {
 
 export const OngletRadier: React.FC<OngletRadierProps> = ({ modele, onUpdateRadier }) => {
   const [afficherSolStructure, setAfficherSolStructure] = useState(true);
+  const [afficherTableauSousCouches, setAfficherTableauSousCouches] = useState(false);
   const [maillageN, setMaillageN] = useState<number>(8);
   const [copiePressePapier, setCopiePressePapier] = useState(false);
 
@@ -71,6 +74,21 @@ export const OngletRadier: React.FC<OngletRadierProps> = ({ modele, onUpdateRadi
     modele.couches,
     modele.hydrogeologie
   );
+
+  const courbeTassement = useMemo(() => {
+    return calculerCourbeTassementCharge(
+      radierActif,
+      modele.referentiel.coteTerrainNaturel,
+      modele.couches,
+      modele.hydrogeologie,
+      { nbPoints: 25, facteurMaxCharge: 2.0 }
+    );
+  }, [
+    radierActif,
+    modele.referentiel.coteTerrainNaturel,
+    modele.couches,
+    modele.hydrogeologie,
+  ]);
 
   const resRessorts = calculerRadierSurRessortsIteratifs(
     radierActif,
@@ -429,57 +447,93 @@ export const OngletRadier: React.FC<OngletRadierProps> = ({ modele, onUpdateRadi
             </div>
           </div>
 
+          {/* Visualisation Recharts : Courbe de tassement théorique en fonction de la charge */}
+          <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-xs space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <TrendingDown className="w-4 h-4 text-sky-600" />
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  Courbe de tassement théorique sous le radier s = f(charge)
+                </h4>
+              </div>
+              <span className="text-[11px] text-slate-500 font-medium">
+                Intégration œdométrique Boussinesq &amp; Steinbrenner
+              </span>
+            </div>
+
+            <GraphiqueCourbeTassement
+              points={courbeTassement}
+              pressionActuelle_kPa={resELS.pressionAppliquee_q}
+              chargeActuelle_kN={Math.max(10, radierActif.actions.V_G + radierActif.actions.V_Q)}
+              tassementCentreActuel_mm={resELS.tassementCentreTotal_mm}
+              tassementCoinActuel_mm={resELS.tassementCoinTotal_mm}
+              tassementMoyenActuel_mm={resELS.tassementMoyen_mm}
+              seuilAdmissible_mm={50}
+            />
+          </div>
+
           {/* Découpage en sous-couches et régimes de consolidation */}
           <div className="border border-slate-200 rounded-lg overflow-hidden">
-            <div className="px-3 py-1.5 bg-slate-100 border-b border-slate-200 text-xs font-semibold text-slate-700">
-              Détail du calcul oedométrique par sous-couche (Loi tri-zone de consolidation)
+            <div className="px-3 py-2 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-700">
+                Détail du calcul oedométrique par sous-couche (Loi tri-zone de consolidation)
+              </span>
+              <button
+                type="button"
+                onClick={() => setAfficherTableauSousCouches(!afficherTableauSousCouches)}
+                className="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-300 transition"
+              >
+                {afficherTableauSousCouches ? 'Masquer tableau' : 'Afficher tableau'}
+              </button>
             </div>
-            <div className="max-h-60 overflow-y-auto">
-              <table className="w-full text-left text-xs border-collapse font-mono">
-                <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 sticky top-0">
-                  <tr>
-                    <th className="p-2 font-medium">Cote (m)</th>
-                    <th className="p-2 font-medium font-sans">Couche</th>
-                    <th className="p-2 font-medium">σ'v0 (kPa)</th>
-                    <th className="p-2 font-medium">Δσ_v centre (kPa)</th>
-                    <th className="p-2 font-medium">σ'p (kPa)</th>
-                    <th className="p-2 font-medium font-sans">Régime</th>
-                    <th className="p-2 font-medium text-right font-sans">s_i (mm)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {resELS.detailsSousCouches.map((d) => (
-                    <tr key={d.index} className="hover:bg-slate-50">
-                      <td className="p-2">
-                        {d.coteHaut.toFixed(1)} à {d.coteBas.toFixed(1)}
-                      </td>
-                      <td className="p-2 font-sans font-medium text-slate-700">{d.coucheNom}</td>
-                      <td className="p-2 text-slate-600">{d.sigma_v0_prime}</td>
-                      <td className="p-2 text-sky-700 font-bold">{d.delta_sigma_v}</td>
-                      <td className="p-2 text-slate-600">{d.sigma_p_prime}</td>
-                      <td className="p-2 font-sans">
-                        {d.regime === 'surconsolide' && (
-                          <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded text-[10px]">
-                            Surconsolidé (Cs)
-                          </span>
-                        )}
-                        {d.regime === 'normalement_consolide' && (
-                          <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded text-[10px]">
-                            Normal. consolidé (Cc)
-                          </span>
-                        )}
-                        {d.regime === 'franchissement' && (
-                          <span className="text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded text-[10px] font-semibold">
-                            Franchissement σ'p (Cs+Cc)
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-2 text-right font-bold text-slate-900">{d.tassementCentre_mm}</td>
+            {afficherTableauSousCouches && (
+              <div className="max-h-60 overflow-y-auto">
+                <table className="w-full text-left text-xs border-collapse font-mono">
+                  <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 sticky top-0">
+                    <tr>
+                      <th className="p-2 font-medium">Cote (m)</th>
+                      <th className="p-2 font-medium font-sans">Couche</th>
+                      <th className="p-2 font-medium">σ'v0 (kPa)</th>
+                      <th className="p-2 font-medium">Δσ_v centre (kPa)</th>
+                      <th className="p-2 font-medium">σ'p (kPa)</th>
+                      <th className="p-2 font-medium font-sans">Régime</th>
+                      <th className="p-2 font-medium text-right font-sans">s_i (mm)</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {resELS.detailsSousCouches.map((d) => (
+                      <tr key={d.index} className="hover:bg-slate-50">
+                        <td className="p-2">
+                          {d.coteHaut.toFixed(1)} à {d.coteBas.toFixed(1)}
+                        </td>
+                        <td className="p-2 font-sans font-medium text-slate-700">{d.coucheNom}</td>
+                        <td className="p-2 text-slate-600">{d.sigma_v0_prime}</td>
+                        <td className="p-2 text-sky-700 font-bold">{d.delta_sigma_v}</td>
+                        <td className="p-2 text-slate-600">{d.sigma_p_prime}</td>
+                        <td className="p-2 font-sans">
+                          {d.regime === 'surconsolide' && (
+                            <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded text-[10px]">
+                              Surconsolidé (Cs)
+                            </span>
+                          )}
+                          {d.regime === 'normalement_consolide' && (
+                            <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded text-[10px]">
+                              Normal. consolidé (Cc)
+                            </span>
+                          )}
+                          {d.regime === 'franchissement' && (
+                            <span className="text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded text-[10px] font-semibold">
+                              Franchissement σ'p (Cs+Cc)
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-2 text-right font-bold text-slate-900">{d.tassementCentre_mm}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </div>

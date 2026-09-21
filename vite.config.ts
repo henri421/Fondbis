@@ -4,11 +4,11 @@ import path from 'path';
 import {defineConfig} from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig(() => {
+export default defineConfig(({ command }) => {
   return {
-    // Chemins relatifs uniquement (CDC §3.3) : permet l'hébergement sous sous-répertoire
-    // (GitHub Pages, ex. henri421.github.io/Fondbis/) sans casser les assets ni le manifest.
-    base: './',
+    // En dev ('serve') : base '/' requise par le dev server Vite et le reverse-proxy AI Studio.
+    // Au build ('build') : base './' (CDC §3.3) pour hébergement sous sous-répertoire (GitHub Pages).
+    base: command === 'serve' ? '/' : './',
     plugins: [
       react(),
       tailwindcss(),
@@ -50,8 +50,7 @@ export default defineConfig(() => {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         },
         devOptions: {
-          enabled: true,
-          type: 'module',
+          enabled: false,
         },
       }),
     ],

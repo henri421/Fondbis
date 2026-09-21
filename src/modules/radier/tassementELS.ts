@@ -213,3 +213,136 @@ export function calculerTassementRadierELS(
     statutNormatif: CLAUSES_EC7.tassement_superficielle.statut,
   };
 }
+
+export interface PointCourbeTassementCharge {
+  pression_kPa: number;
+  chargeTotale_kN: number;
+  tassementCentre_mm: number;
+  tassementCoin_mm: number;
+  tassementMoyen_mm: number;
+  tassementDifferentiel_mm: number;
+  ratioChargeELS: number;
+}
+
+/**
+ * Génère la courbe de tassement théorique (centre, coin, moyen) en fonction de la charge
+ * appliquée (pression q en kPa et charge totale V en kN), de 0 à facteurMaxCharge * q_ELS.
+ * Intègre la non-linéarité œdométrique (zones surconsolidée, franchissement de sigma'_p et normalement consolidée).
+ */
+export function calculerCourbeTassementCharge(
+  ouvrage: OuvrageRadier,
+  coteTerrainNaturel: number,
+  couches: CoucheGeotechnique[],
+  hydrogeologie: Hydrogeologie,
+  options?: {
+    nbPoints?: number;
+    facteurMaxCharge?: number;
+  }
+): PointCourbeTassementCharge[] {
+  const { actions, coteBase, largeurB, longueurL } = ouvrage;
+  const surface = largeurB * longueurL;
+  const V_ELS = Math.max(10, actions.V_G + actions.V_Q);
+  const q_ELS = Math.max(1, V_ELS / surface);
+
+  const nbPoints = options?.nbPoints || 21;
+  const facteurMax = options?.facteurMaxCharge || 2.0;
+
+  const profMax = Math.max(5, 3 * largeurB);
+  const dz = 0.25;
+
+  const profilELS = calculerProfilContraintes(coteTerrainNaturel, couches, hydrogeologie, [coteBase], 'ELS');
+
+  interface InfoSousCouche {
+    epaisseur: number;
+    sigma_v0: number;
+    zMilieu: number;
+    Cc: number;
+    Cs: number;
+    e0: number;
+    sigma_p: number;
+  }
+
+  const sousCouches: InfoSousCouche[] = [];
+  let zRelatif = 0;
+  while (zRelatif < profMax) {
+    const epaisseur = Math.min(dz, profMax - zRelatif);
+    const zMilieu = zRelatif + epaisseur / 2;
+    const coteAbsolueMilieu = coteBase - zMilieu;
+    const couche = trouverCoucheACote(couches, coteAbsolueMilieu);
+    if (couche) {
+      const pt = profilELS.calculerA(coteAbsolueMilieu);
+      const sigma_v0 = Math.max(1, pt.sigma_vPrime);
+      sousCouches.push({
+        epaisseur,
+        sigma_v0,
+        zMilieu,
+        Cc: couche.deformation.Cc.v,
+        Cs: couche.deformation.Cs.v,
+        e0: couche.deformation.e0.v,
+        sigma_p: couche.deformation.sigmaPrecons.v || sigma_v0 * 1.5,
+      });
+    }
+    zRelatif += epaisseur;
+  }
+
+  const qValuesSet = new Set<number>();
+  for (let i = 0; i < nbPoints; i++) {
+    const q = (i / (nbPoints - 1)) * (q_ELS * facteurMax);
+    qValuesSet.add(Number(q.toFixed(2)));
+  }
+  qValuesSet.add(Number(q_ELS.toFixed(2)));
+  const qValues = Array.from(qValuesSet).sort((a, b) => a - b);
+
+  const points: PointCourbeTassementCharge[] = [];
+
+  for (const q of qValues) {
+    let sCentre = 0;
+    let sCoin = 0;
+
+    if (q > 1e-3) {
+      for (const sc of sousCouches) {
+        const dSigmaCentre = surcontrainteCentre(q, largeurB, longueurL, sc.zMilieu);
+        const dSigmaCoin = surcontrainteCoin(q, largeurB, longueurL, sc.zMilieu);
+
+        const resC = calculerTassementSousCoucheOedométrique(
+          sc.epaisseur,
+          sc.sigma_v0,
+          dSigmaCentre,
+          sc.Cc,
+          sc.Cs,
+          sc.e0,
+          sc.sigma_p
+        );
+        const resCoin = calculerTassementSousCoucheOedométrique(
+          sc.epaisseur,
+          sc.sigma_v0,
+          dSigmaCoin,
+          sc.Cc,
+          sc.Cs,
+          sc.e0,
+          sc.sigma_p
+        );
+
+        sCentre += resC.s_mm;
+        sCoin += resCoin.s_mm;
+      }
+    }
+
+    const sMoyen = (sCentre + sCoin) / 2;
+    const sDiff = Math.abs(sCentre - sCoin);
+    const chargeTotale = q * surface;
+
+    points.push({
+      pression_kPa: Number(q.toFixed(1)),
+      chargeTotale_kN: Number(chargeTotale.toFixed(0)),
+      tassementCentre_mm: Number(sCentre.toFixed(2)),
+      tassementCoin_mm: Number(sCoin.toFixed(2)),
+      tassementMoyen_mm: Number(sMoyen.toFixed(2)),
+      tassementDifferentiel_mm: Number(sDiff.toFixed(2)),
+      ratioChargeELS: Number((q / q_ELS).toFixed(2)),
+    });
+  }
+
+  return points;
+}
+
