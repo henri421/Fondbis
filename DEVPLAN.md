@@ -1788,10 +1788,66 @@ git commit -m "feat(soutenement): UI de la surcouche Berlinoise dans l'onglet Pa
       (accepter tel quel, ou lister les corrections nécessaires).
 
 
+## Revue — Surcouche Berlinoise (2026-09-21, Claude) — acceptée avec réserves
+
+Implémentation faite en inline dans la même session que la spec/le plan (commits `b39e2db`
+à `c3b8322`), en suivant les 7 tâches du plan une à une (TDD, commit après chaque tâche).
+`npm run test:acceptance` passe à **34/34 (100%)** (30/30 avant + `T_BERL.1`-`T_BERL.4`),
+`tsc --noEmit` et `npm run build` propres.
+
+**Conformité à la spec, vérifiée point par point :**
+- Les 3 vérifications du §8.5 sont bien présentes et testées séparément : répartition
+  profilé/blindage (`T_BERL.1`), stabilité du front non soutenu + résistance du blindage posé
+  (`T_BERL.2`, `T_BERL.3`), fiche réduite (`T_BERL.4`).
+- L'hypothèse "pas de réduction de voûte" est bien portée par le type (`voûteNonPriseEnCompte:
+  true`, littéral, pas juste un commentaire) et rappelée dans l'UI ("hypothèse conservatrice, à
+  affiner").
+- Le garde-fou de `verifierFicheProfileReduite` est bien local à `berlinoise.ts` : `git diff`
+  du commit initial jusqu'à HEAD confirme que `solveurPoutreRessorts.ts`, `paroiPhasee.ts`,
+  `pousseeButee.ts` et `murEnL.ts` sont strictement inchangés — seuls les 5 fichiers prévus par
+  le plan ont bougé (`DEVPLAN.md`, `types/geotech.ts`, `berlinoise.ts`,
+  `acceptanceTestsSoutenement.ts`, `OngletParoiPhasee.tsx`).
+- Recalcul à la main des 4 tests (formules Hc=4cu/γ, moment poutre simplement appuyée,
+  répartition par entraxe, les 3 cas de `T_BERL.4`) : tous les résultats attendus recoupent
+  exactement ce que la suite rapporte comme SUCCÈS.
+
+**Réserve 1 — vérification visuelle non faite.** L'étape 13 du plan (ouvrir l'app dans un
+navigateur, basculer sur Berlinoise, vérifier visuellement) n'a pas pu être réalisée : ce
+sandbox n'a ni navigateur système ni accès réseau pour télécharger un binaire Chromium
+(`npx playwright install` échoue en timeout réseau). À la place : `tsc --noEmit` propre,
+`npm run build` propre (donc JSX et hooks syntaxiquement valides — un `vite build` échoue sur
+des balises JSX déséquilibrées ou un import cassé), et relecture manuelle du diff complet de
+`OngletParoiPhasee.tsx` (ordre des hooks non conditionnel — `useMemo` de `surcoucheBerlinoise`
+appelé sans condition avant tout early-return JSX ; accolades/parenthèses JSX équilibrées).
+C'est une évidence raisonnable mais **pas** une preuve visuelle. **Recommandation : Henri
+vérifie une fois dans son navigateur habituel** (`npm run dev`, onglet Paroi Phasée, bascule
+Berlinoise) avant de considérer la tâche 7 définitivement close — même logique que la revue du
+2026-09-17 qui avait trouvé le bug de géométrie par défaut uniquement en ouvrant un vrai
+navigateur, jamais via la suite CLI.
+
+**Réserve 2 — pas de persistance.** `sousType` et `parametresBerlinoise` ne sont pas
+réinjectés dans `modele.ouvrages.soutenements` via `onUpdateSoutenement` (cette prop existe
+sur `OngletParoiPhasee` mais n'est appelée nulle part dans tout le composant, y compris pour
+les champs déjà existants comme `epaisseur` ou `moduleE_GPa` — comportement préexistant, pas
+introduit par cette tâche). Changer d'onglet ou recharger le projet perd donc la saisie
+Berlinoise, exactement comme elle perd déjà la géométrie de paroi phasée standard aujourd'hui.
+Pas corrigé ici : hors périmètre de la spec, et corriger ce point isolément pour la seule
+Berlinoise créerait une incohérence avec le reste de l'onglet plutôt que de la résoudre.
+
+**Non revu ici (hors périmètre)** : la surcouche pieux sécants (§8.5, pas encore spécifiée) et
+la correction définitive du solveur (Cause 2, tâche toujours en attente — le garde-fou ajouté
+ici est un palliatif local, documenté comme tel dans le code et dans le message du commit
+`a45e033`).
+
+**Verdict : accepté**, sous réserve de la vérification visuelle (Réserve 1) par Henri à
+l'occasion de la prochaine ouverture de l'app.
+
+
 ## Prochaines étapes (selon plan)
 
-1. **Surcouche Berlinoise (§8.5)** — spec ci-dessus, en cours d'implémentation (Claude,
-   2026-09-21).
+1. **Surcouche Berlinoise (§8.5)** — implémentée et revue (voir ci-dessus, 2026-09-21).
+   Reste : vérification visuelle par Henri dans un vrai navigateur (Réserve 1 de la revue),
+   non faite faute d'outillage navigateur dans le sandbox d'implémentation.
 2. **Surcouche pieux sécants (§8.5)** — pas encore spécifiée, à faire après la berlinoise.
 3. **Correction définitive du solveur (Cause 2)** — garde-fou local posé dans la surcouche
    Berlinoise en attendant, mais la correction dans `solveurPoutreRessorts.ts` reste due
