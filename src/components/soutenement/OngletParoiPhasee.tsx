@@ -13,6 +13,11 @@ import {
   ResultatPhaseParoi,
 } from '../../modules/soutenement/paroiPhasee';
 import { verifierRenardFondDeFouille } from '../../briques/hydraulique';
+import {
+  calculerSurcoucheBerlinoise,
+  ParametresProfileBerlinoise,
+  ResultatSurcoucheBerlinoisePhase,
+} from '../../modules/soutenement/berlinoise';
 import { trouverCoucheACote } from '../../core/profilContraintes';
 import {
   Layers,
@@ -61,6 +66,30 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
   const [epaisseur, setEpaisseur] = useState<number>(
     soutenementExistant?.epaisseurVoile ?? 0.6
   );
+  const [sousType, setSousType] = useState<'continue' | 'berlinoise'>(
+    soutenementExistant?.sousType === 'berlinoise' ? 'berlinoise' : 'continue'
+  );
+  const [entraxeProfiles, setEntraxeProfiles] = useState<number>(
+    soutenementExistant?.parametresBerlinoise?.entraxeProfiles ?? 1.2
+  );
+  const [profileI, setProfileI] = useState<number>(
+    soutenementExistant?.parametresBerlinoise?.profile.I ?? 0.0003
+  ); // m⁴, ex HEB 300 ~ 2.5e-4 m⁴
+  const [profileW, setProfileW] = useState<number>(
+    soutenementExistant?.parametresBerlinoise?.profile.W ?? 0.0017
+  ); // m³
+  const [profileLargeur, setProfileLargeur] = useState<number>(
+    soutenementExistant?.parametresBerlinoise?.profile.largeur ?? 0.3
+  ); // m
+  const [blindageHauteurPasse, setBlindageHauteurPasse] = useState<number>(
+    soutenementExistant?.parametresBerlinoise?.blindage.hauteurPasse ?? 1.0
+  ); // m
+  const [blindageEpaisseur, setBlindageEpaisseur] = useState<number>(
+    soutenementExistant?.parametresBerlinoise?.blindage.epaisseur ?? 0.05
+  ); // m
+  const [blindageContrainteAdm, setBlindageContrainteAdm] = useState<number>(
+    soutenementExistant?.parametresBerlinoise?.blindage.contrainteAdmissible ?? 10000
+  ); // kPa
   const [moduleE_GPa, setModuleE_GPa] = useState<number>(30.0); // 30 GPa béton
   const [etatCalcul, setEtatCalcul] = useState<'ELS' | 'ELU'>('ELS');
   const [phaseActiveIndex, setPhaseActiveIndex] = useState<number>(0);
@@ -128,10 +157,12 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
     return initial;
   });
 
-  // Inertie et section calculées par mètre linéaire
-  const E_kPa = moduleE_GPa * 1e6; // kPa
-  const I_m4 = (1.0 * Math.pow(epaisseur, 3)) / 12; // m4/m
-  const A_m2 = 1.0 * epaisseur; // m2/m
+  // Inertie et section calculées par mètre linéaire.
+  // Berlinoise : rigidité "lissée" = rigidité du profilé isolé répartie sur son entraxe
+  // (le solveur Niveau 2 travaille par mètre linéaire de paroi, pas par profilé).
+  const E_kPa = sousType === 'berlinoise' ? 210.0e6 : moduleE_GPa * 1e6; // 210 GPa acier
+  const I_m4 = sousType === 'berlinoise' ? profileI / entraxeProfiles : (1.0 * Math.pow(epaisseur, 3)) / 12;
+  const A_m2 = sousType === 'berlinoise' ? profileLargeur / entraxeProfiles : 1.0 * epaisseur;
 
   // 2. Calcul par éléments finis phasé
   const resultatCalcul: ResultatCalculParoiPhasee | null = useMemo(() => {
@@ -162,6 +193,8 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
     E_kPa,
     I_m4,
     A_m2,
+    sousType,
+    entraxeProfiles,
     modele.couches,
     modele.hydrogeologie,
     modele.configurationNormative,
@@ -197,6 +230,52 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
 
     return verifierRenardFondDeFouille(gammaSat, coteNappeAmont, coteFouille, ficheT, gammaEau);
   }, [phaseCourante, coteBase, modele.hydrogeologie, modele.couches]);
+
+  // Surcouche Berlinoise (§8.5) : répartition profilé/blindage, stabilité front non soutenu,
+  // résistance blindage posé, fiche réduite + garde-fou local (cf. DEVPLAN)
+  const surcoucheBerlinoise: ResultatSurcoucheBerlinoisePhase[] | null = useMemo(() => {
+    if (sousType !== 'berlinoise' || !resultatCalcul) return null;
+    const parametres: ParametresProfileBerlinoise = {
+      entraxeProfiles,
+      profile: { I: profileI, W: profileW, largeur: profileLargeur },
+      blindage: {
+        hauteurPasse: blindageHauteurPasse,
+        epaisseur: blindageEpaisseur,
+        contrainteAdmissible: blindageContrainteAdm,
+      },
+    };
+    try {
+      return calculerSurcoucheBerlinoise(
+        resultatCalcul,
+        parametres,
+        modele.couches,
+        modele.configurationNormative,
+        coteTete - coteBase
+      );
+    } catch (e) {
+      console.error('Erreur lors du calcul de la surcouche Berlinoise :', e);
+      return null;
+    }
+  }, [
+    sousType,
+    resultatCalcul,
+    entraxeProfiles,
+    profileI,
+    profileW,
+    profileLargeur,
+    blindageHauteurPasse,
+    blindageEpaisseur,
+    blindageContrainteAdm,
+    modele.couches,
+    modele.configurationNormative,
+    coteTete,
+    coteBase,
+  ]);
+
+  const phaseBerlinoiseCourante: ResultatSurcoucheBerlinoisePhase | null =
+    surcoucheBerlinoise && surcoucheBerlinoise.length > 0
+      ? surcoucheBerlinoise[phaseIndexEffectif] ?? null
+      : null;
 
   // Gestion des modifications de phases
   const handleAddPhase = () => {
@@ -498,6 +577,59 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
               </div>
             </div>
           )}
+
+          {/* Surcouche Berlinoise (§8.5) */}
+          {phaseBerlinoiseCourante && (
+            <div
+              className={`p-3 border rounded-xl shadow-xs ${
+                phaseBerlinoiseCourante.ficheReduite.gardeFouDeclenche
+                  ? 'bg-rose-50/70 border-rose-200 text-rose-950'
+                  : phaseBerlinoiseCourante.ficheReduite.conforme &&
+                    phaseBerlinoiseCourante.stabiliteFront.stable &&
+                    phaseBerlinoiseCourante.resistanceBlindage.conforme
+                  ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                  : 'bg-amber-50/70 border-amber-200 text-amber-950'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-wider">
+                  Surcouche Berlinoise
+                </span>
+                {phaseBerlinoiseCourante.ficheReduite.gardeFouDeclenche ? (
+                  <ShieldAlert className="w-4 h-4 text-rose-600" />
+                ) : (
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                )}
+              </div>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-xl font-black">
+                  {phaseBerlinoiseCourante.repartition.momentProfile.toFixed(1)}
+                </span>
+                <span className="text-xs font-semibold">kNm / profilé</span>
+              </div>
+              <div className="mt-1 text-[10px] font-medium space-y-0.5">
+                <div>
+                  Front non soutenu : FS = {phaseBerlinoiseCourante.stabiliteFront.facteurSecurite.toFixed(2)}
+                  {phaseBerlinoiseCourante.stabiliteFront.stable ? ' OK' : ' Risque'}
+                </div>
+                <div>
+                  Blindage posé : {phaseBerlinoiseCourante.resistanceBlindage.conforme ? 'OK' : 'Non conforme'}
+                  {' '}({phaseBerlinoiseCourante.resistanceBlindage.momentDemande.toFixed(1)} / {phaseBerlinoiseCourante.resistanceBlindage.momentResistant.toFixed(1)} kNm/m)
+                </div>
+                <div>
+                  Fiche réduite : {phaseBerlinoiseCourante.ficheReduite.conforme ? 'OK' : 'Non conforme'}
+                </div>
+                {phaseBerlinoiseCourante.ficheReduite.avertissement && (
+                  <div className="text-rose-700 font-bold">
+                    ⚠ {phaseBerlinoiseCourante.ficheReduite.avertissement}
+                  </div>
+                )}
+                <div className="italic opacity-70">
+                  Répartition sans effet de voûte — hypothèse conservatrice, à affiner.
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -685,6 +817,31 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
             1. Propriétés de la Paroi
           </h3>
 
+          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
+            <button
+              type="button"
+              onClick={() => setSousType('continue')}
+              className={`px-2.5 py-1 rounded-md transition ${
+                sousType === 'continue'
+                  ? 'bg-white text-slate-900 font-bold shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Paroi continue
+            </button>
+            <button
+              type="button"
+              onClick={() => setSousType('berlinoise')}
+              className={`px-2.5 py-1 rounded-md transition ${
+                sousType === 'berlinoise'
+                  ? 'bg-white text-amber-900 font-bold shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Berlinoise
+            </button>
+          </div>
+
           <div>
             <label className="block text-slate-500 mb-1">Cote Tête / Crête (m NGF)</label>
             <input
@@ -733,6 +890,79 @@ export const OngletParoiPhasee: React.FC<OngletParoiPhaseeProps> = ({
               />
             </div>
           </div>
+
+          {sousType === 'berlinoise' && (
+            <div className="p-2.5 bg-amber-50/60 border border-amber-200 rounded-lg space-y-2">
+              <div className="text-[11px] font-bold text-amber-900 uppercase tracking-wider">
+                Profilés & Blindage
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-500 mb-1">Entraxe profilés (m)</label>
+                  <input
+                    type="number" step="0.1" min="0.5" max="4.0"
+                    value={entraxeProfiles}
+                    onChange={(e) => setEntraxeProfiles(parseFloat(e.target.value) || 1.2)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">Largeur profilé (m)</label>
+                  <input
+                    type="number" step="0.05" min="0.1" max="1.0"
+                    value={profileLargeur}
+                    onChange={(e) => setProfileLargeur(parseFloat(e.target.value) || 0.3)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">I profilé (m⁴)</label>
+                  <input
+                    type="number" step="0.00001" min="0.00001"
+                    value={profileI}
+                    onChange={(e) => setProfileI(parseFloat(e.target.value) || 0.0003)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">W profilé (m³)</label>
+                  <input
+                    type="number" step="0.0001" min="0.0001"
+                    value={profileW}
+                    onChange={(e) => setProfileW(parseFloat(e.target.value) || 0.0017)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">Hauteur passe (m)</label>
+                  <input
+                    type="number" step="0.1" min="0.2" max="3.0"
+                    value={blindageHauteurPasse}
+                    onChange={(e) => setBlindageHauteurPasse(parseFloat(e.target.value) || 1.0)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">Épais. blindage (m)</label>
+                  <input
+                    type="number" step="0.01" min="0.02" max="0.2"
+                    value={blindageEpaisseur}
+                    onChange={(e) => setBlindageEpaisseur(parseFloat(e.target.value) || 0.05)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-slate-500 mb-1">Contrainte admissible blindage (kPa)</label>
+                  <input
+                    type="number" step="500" min="1000"
+                    value={blindageContrainteAdm}
+                    onChange={(e) => setBlindageContrainteAdm(parseFloat(e.target.value) || 10000)}
+                    className="w-full px-2 py-1.5 border border-slate-300 rounded-lg font-bold bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="p-2.5 bg-slate-50 rounded-lg space-y-1 text-slate-600 text-[11px]">
             <div>• Hauteur totale de l'écran : <strong>{(coteTete - coteBase).toFixed(2)} m</strong></div>
