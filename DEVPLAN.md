@@ -2263,6 +2263,28 @@ CDC est maintenant **complète** : Berlinoise et Pieux Sécants implémentées e
 en L restant hors périmètre comme prévu par le CDC lui-même.
 
 
+## Refonte UI/UX — rattachement à l'identité WebAedificium (2026-09-22, Claude)
+
+Henri : « je veux juste une uniformité entre page et également avec les autres app de
+webaedificium... quelque chose de sobre et simple mais fonctionnel ». Voir `DESIGN.md` pour
+le détail (jetons repris tels quels de `Structura/DESIGN.md`, aucune extension nécessaire
+pour les concepts propres à Fondation après audit).
+
+**Phase 1 posée (fondation + preuve), en attente de validation avant de dérouler :**
+- `src/index.css` : `:root` (jetons) + `@theme` (pont Tailwind v4) — `:root` copiable tel
+  quel dans un autre dépôt de la suite, `@theme` n'est qu'un miroir.
+- `src/components/ui/` : 4 primitives (`Card`, `Verdict`, `Bouton`, `Champ`).
+- Châssis (`App.tsx`, `BandeauNormatif.tsx`) migré : fond, en-tête, barre d'onglets — plus de
+  dégradé, plus de bouton « primaire » coloré, plus d'icônes teintées au hasard par onglet.
+- Preuve sur `OngletValidation.tsx` (zéro moteur normatif, zéro risque calcul).
+- Vérifié : `tsc`, `npm run test:acceptance` (37/37, inchangé — aucun fichier de calcul
+  touché), `npm run build`, capture d'écran navigateur avant/après.
+
+**Reste (après validation d'Henri)** : les 13 autres fichiers, dont les deux gros chantiers
+`OngletParoiPhasee.tsx` (2145 lignes) et `CoupeDeSolCanvas.tsx` (993 lignes, une douzaine de
+hex codés en dur dans les fonctions de dessin SVG) — chacun sur son propre commit/revue,
+jamais mélangés à du code de calcul.
+
 ## Prochaines étapes (selon plan)
 
 1. **Surcouche Berlinoise (§8.5)** — **close** : implémentée, testée (35/35), revue, vérifiée

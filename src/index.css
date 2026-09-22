@@ -1,1 +1,86 @@
 @import "tailwindcss";
+
+/*
+ * Identité visuelle Fondation — rattachée à la suite WebAedificium
+ * (section-uls / poinçonnement / STM / hub). Voir DESIGN.md.
+ *
+ * :root = bloc de référence, copiable tel quel dans un autre dépôt de la suite.
+ * @theme = pont vers les classes utilitaires Tailwind (bg-fond, text-texte-doux, etc.),
+ *          ne fait que lire les mêmes variables — le :root reste la source de vérité.
+ */
+:root {
+  /* ---- Châssis ---- */
+  --fond: #f7f7f6;
+  --surface: #ffffff;
+  --surface-appui: #f2f1ec;
+  --texte: #1a1a1a;
+  --texte-doux: #4a4842;
+  --texte-faible: #6a6862;
+  --bordure: #c8c6c0;
+  --bordure-douce: #eceae4;
+
+  /* ---- Interface ---- */
+  --accent: #1e5aa8;
+  --accent-doux: #eaf1f9;
+
+  /* ---- Couleurs de sens ---- */
+  --compression: #2f5d8a;
+  --traction: #a8442a;
+  --beton: #e7eaee;
+  --neutre: #9a978f;
+
+  /* ---- Verdicts ---- */
+  --ok: #1f6f3f;
+  --ok-fond: #eaf4ee;
+  --alerte: #8a6d00;
+  --alerte-fond: #fdf6e3;
+  --refus: #a52121;
+  --refus-fond: #f8ecec;
+
+  /* ---- Typographie ---- */
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* ---- Rayons ---- */
+  --rayon: 4px;
+  --rayon-petit: 3px;
+
+  color-scheme: light;
+}
+
+@theme {
+  --color-fond: var(--fond);
+  --color-surface: var(--surface);
+  --color-surface-appui: var(--surface-appui);
+  --color-texte: var(--texte);
+  --color-texte-doux: var(--texte-doux);
+  --color-texte-faible: var(--texte-faible);
+  --color-bordure: var(--bordure);
+  --color-bordure-douce: var(--bordure-douce);
+
+  --color-accent: var(--accent);
+  --color-accent-doux: var(--accent-doux);
+
+  --color-compression: var(--compression);
+  --color-traction: var(--traction);
+  --color-beton: var(--beton);
+  --color-neutre: var(--neutre);
+
+  --color-ok: var(--ok);
+  --color-ok-fond: var(--ok-fond);
+  --color-alerte: var(--alerte);
+  --color-alerte-fond: var(--alerte-fond);
+  --color-refus: var(--refus);
+  --color-refus-fond: var(--refus-fond);
+
+  --font-sans: var(--sans);
+  --font-mono: var(--mono);
+
+  --radius-rayon: var(--rayon);
+  --radius-rayon-petit: var(--rayon-petit);
+}
+
+body {
+  font-size: 14px;
+  line-height: 1.5;
+}

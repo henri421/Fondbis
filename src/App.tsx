@@ -129,25 +129,25 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-100 text-slate-900 font-sans">
+    <div className="min-h-screen flex flex-col bg-fond text-texte font-sans">
       {/* 1. Bandeau Normatif Permanent Obligatoire */}
       <BandeauNormatif />
 
       {/* 2. Barre d'entête principale */}
-      <header className="bg-slate-900 text-white px-4 py-3 border-b border-slate-800 shadow-md">
+      <header className="bg-surface text-texte px-4 py-3 border-b border-bordure">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-slate-950 font-black text-base shadow-sm">
+            <div className="w-9 h-9 rounded-rayon bg-accent-doux text-accent flex items-center justify-center font-semibold text-base">
               EC7
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-base font-black tracking-tight text-white">GeoTech EC7</h1>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
+                <h1 className="text-base font-normal tracking-wide text-texte">GeoTech EC7</h1>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-rayon-petit bg-surface-appui text-texte-doux border border-bordure">
                   EN 1997-1:2004 • DA2*
                 </span>
               </div>
-              <p className="text-xs text-slate-400 truncate max-w-md">
+              <p className="text-xs text-texte-doux truncate max-w-md">
                 {modele.projet.nom} ({modele.projet.reference})
               </p>
             </div>
@@ -165,7 +165,7 @@ export default function App() {
             <button
               id="btn-importer-json"
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-semibold border border-slate-700 transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-appui hover:bg-[#e8e7e1] text-texte rounded-rayon-petit text-xs font-semibold border border-bordure transition-colors"
               title="Importer un projet JSON"
             >
               <Upload className="w-3.5 h-3.5" />
@@ -175,7 +175,7 @@ export default function App() {
             <button
               id="btn-exporter-json"
               onClick={handleExport}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-xs font-semibold border border-slate-700 transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-appui hover:bg-[#e8e7e1] text-texte rounded-rayon-petit text-xs font-semibold border border-bordure transition-colors"
               title="Exporter le projet au format JSON"
             >
               <Download className="w-3.5 h-3.5" />
@@ -187,7 +187,7 @@ export default function App() {
             <button
               id="btn-note-calcul"
               onClick={() => setNoteDeCalculOuverte(true)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-xs transition"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-surface-appui hover:bg-[#e8e7e1] text-texte rounded-rayon-petit text-xs font-semibold border border-bordure transition-colors"
             >
               <FileText className="w-3.5 h-3.5" />
               Note de Calcul
@@ -218,102 +218,102 @@ export default function App() {
       )}
 
       {/* 3. Barre des onglets de calcul */}
-      <nav className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-xs relative">
+      <nav className="bg-surface border-b border-bordure sticky top-0 z-20 relative">
         {/* Fondu indiquant que la barre défile horizontalement (les onglets peuvent dépasser
             la largeur visible) — sans lui, un onglet tronqué en bord de fenêtre ressemble à
             un bug plutôt qu'à une invitation à faire défiler. */}
-        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-white to-transparent z-10" />
+        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-surface to-transparent z-10" />
         <div className="max-w-7xl mx-auto px-4 flex space-x-1 overflow-x-auto py-1">
           <button
             id="tab-btn-radier"
             onClick={() => setOngletActif('radier')}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
+            className={`flex items-center gap-2 px-3 py-2 rounded-rayon-petit text-xs font-semibold whitespace-nowrap transition-colors ${
               ongletActif === 'radier'
-                ? 'bg-emerald-50 text-emerald-900 border border-emerald-200 shadow-xs'
-                : 'text-slate-600 hover:bg-slate-50'
+                ? 'bg-surface-appui text-texte border border-bordure'
+                : 'text-texte-doux hover:bg-surface-appui'
             }`}
           >
-            <HardHat className="w-4 h-4 text-emerald-600" />
+            <HardHat className="w-4 h-4" />
             <span>Module A : Radiers & Semelles</span>
           </button>
 
           <button
             id="tab-btn-pieux"
             onClick={() => setOngletActif('pieux')}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
+            className={`flex items-center gap-2 px-3 py-2 rounded-rayon-petit text-xs font-semibold whitespace-nowrap transition-colors ${
               ongletActif === 'pieux'
-                ? 'bg-emerald-50 text-emerald-900 border border-emerald-200 shadow-xs'
-                : 'text-slate-600 hover:bg-slate-50'
+                ? 'bg-surface-appui text-texte border border-bordure'
+                : 'text-texte-doux hover:bg-surface-appui'
             }`}
           >
-            <Anchor className="w-4 h-4 text-sky-600" />
+            <Anchor className="w-4 h-4" />
             <span>Module B : Fondations Profondes</span>
           </button>
 
           <button
             id="tab-btn-soutenement"
             onClick={() => setOngletActif('soutenement')}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
+            className={`flex items-center gap-2 px-3 py-2 rounded-rayon-petit text-xs font-semibold whitespace-nowrap transition-colors ${
               ongletActif === 'soutenement'
-                ? 'bg-emerald-50 text-emerald-900 border border-emerald-200 shadow-xs'
-                : 'text-slate-600 hover:bg-slate-50'
+                ? 'bg-surface-appui text-texte border border-bordure'
+                : 'text-texte-doux hover:bg-surface-appui'
             }`}
           >
-            <Shield className="w-4 h-4 text-amber-600" />
+            <Shield className="w-4 h-4" />
             <span>Module C : Soutènements (Mur & Paroi)</span>
           </button>
 
           <button
             id="tab-btn-stabilite"
             onClick={() => setOngletActif('stabilite')}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
+            className={`flex items-center gap-2 px-3 py-2 rounded-rayon-petit text-xs font-semibold whitespace-nowrap transition-colors ${
               ongletActif === 'stabilite'
-                ? 'bg-emerald-50 text-emerald-900 border border-emerald-200 shadow-xs'
-                : 'text-slate-600 hover:bg-slate-50'
+                ? 'bg-surface-appui text-texte border border-bordure'
+                : 'text-texte-doux hover:bg-surface-appui'
             }`}
           >
-            <Sliders className="w-4 h-4 text-purple-600" />
+            <Sliders className="w-4 h-4" />
             <span>Stabilité Pentes (Bishop)</span>
           </button>
 
-          <div className="w-px h-5 bg-slate-200 my-auto mx-1 shrink-0" />
+          <div className="w-px h-5 bg-bordure my-auto mx-1 shrink-0" />
 
           <button
             id="tab-btn-sol"
             onClick={() => setOngletActif('sol')}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
+            className={`flex items-center gap-2 px-3 py-2 rounded-rayon-petit text-xs font-semibold whitespace-nowrap transition-colors ${
               ongletActif === 'sol'
-                ? 'bg-slate-100 text-slate-900 font-bold border border-slate-300 shadow-xs'
-                : 'text-slate-600 hover:bg-slate-50'
+                ? 'bg-surface-appui text-texte border border-bordure'
+                : 'text-texte-doux hover:bg-surface-appui'
             }`}
           >
-            <Layers className="w-4 h-4 text-slate-600" />
+            <Layers className="w-4 h-4" />
             <span>Stratigraphie & Sol</span>
           </button>
 
           <button
             id="tab-btn-contraintes"
             onClick={() => setOngletActif('contraintes')}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
+            className={`flex items-center gap-2 px-3 py-2 rounded-rayon-petit text-xs font-semibold whitespace-nowrap transition-colors ${
               ongletActif === 'contraintes'
-                ? 'bg-slate-100 text-slate-900 font-bold border border-slate-300 shadow-xs'
-                : 'text-slate-600 hover:bg-slate-50'
+                ? 'bg-surface-appui text-texte border border-bordure'
+                : 'text-texte-doux hover:bg-surface-appui'
             }`}
           >
-            <LineChart className="w-4 h-4 text-slate-600" />
+            <LineChart className="w-4 h-4" />
             <span>Profil Contraintes</span>
           </button>
 
           <button
             id="tab-btn-validation"
             onClick={() => setOngletActif('validation')}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-rayon-petit text-xs font-semibold whitespace-nowrap transition-colors ${
               ongletActif === 'validation'
-                ? 'bg-emerald-600 text-white font-bold shadow-xs'
-                : 'text-emerald-700 hover:bg-emerald-50'
+                ? 'bg-surface-appui text-texte border border-bordure'
+                : 'text-texte-doux hover:bg-surface-appui'
             }`}
           >
-            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            <CheckCircle2 className="w-4 h-4" />
             <span>Recette Normative (7 Tests)</span>
           </button>
         </div>
