@@ -53,3 +53,8 @@ npm run test:acceptance   # suite de tests d'acceptation normatifs, en CLI
 - [`DEVPLAN.md`](DEVPLAN.md) — journal vivant : état d'avancement par phase, revues de code,
   tâches en cours.
 - [`AGENTS.md`](AGENTS.md) — règles de collaboration et de gestion du dépôt.
+
+## Licence
+
+Ce projet est distribué sous licence MIT. Voir le fichier [`LICENSE`](LICENSE) pour plus de détails.
+

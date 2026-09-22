@@ -2283,11 +2283,11 @@ en L restant hors périmètre comme prévu par le CDC lui-même.
 
 ## Wiring restant (hors code de calcul)
 
-- README.md, LICENSE — à écrire avant toute publication.
-- Décision de visibilité : rester privé tant que la phase 4 n'est pas validée (outil à
+- [x] README.md, LICENSE — rédigés (README complet avec commandes/architecture, LICENSE MIT).
+- [ ] Décision de visibilité : rester privé tant que la phase 4 n'est pas validée (outil à
   responsabilité réglementaire, cf. §13 du CDC). Repasser en public + GitHub Pages, à
   l'anonyme `henri421` comme le reste de la suite, une fois mûr.
-- Une fois public : ajouter l'entrée dans `Structura/index.html` (hub WebAedificium).
+- [ ] Une fois public : ajouter l'entrée dans `Structura/index.html` (hub WebAedificium).
 
 **Correctif (2026-09-16, Claude) : accès PWA en sous-répertoire GitHub Pages.** `vite.config.ts`
 et `index.html` utilisaient des chemins absolus (`/…`) pour tous les assets, le manifest
