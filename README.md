@@ -50,6 +50,8 @@ npm run test:acceptance   # suite de tests d'acceptation normatifs, en CLI
 
 - [`cahier_des_charges_app_geotechnique.md`](cahier_des_charges_app_geotechnique.md) —
   référence normative figée (spécification technique complète, formules, clauses EC7).
+- [`DESIGN.md`](DESIGN.md) — identité visuelle, rattachée à la suite WebAedificium
+  (`section-uls` / `poinçonnement` / `STM` / le hub).
 - [`DEVPLAN.md`](DEVPLAN.md) — journal vivant : état d'avancement par phase, revues de code,
   tâches en cours.
 - [`AGENTS.md`](AGENTS.md) — règles de collaboration et de gestion du dépôt.
