@@ -30,9 +30,9 @@ export const OfflineIndicator: React.FC = () => {
   return (
     <div
       id="indicator-offline"
-      className="fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-xl bg-slate-900 border border-amber-400 text-amber-300 px-3.5 py-2 text-xs font-semibold shadow-xl"
+      className="fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-rayon bg-alerte-fond border border-bordure text-alerte px-3.5 py-2 text-xs font-semibold"
     >
-      <WifiOff className="w-4 h-4 text-amber-400 animate-pulse" />
+      <WifiOff className="w-4 h-4 animate-pulse" />
       <span>Mode Hors-ligne — Calculs et données locales actifs.</span>
     </div>
   );
