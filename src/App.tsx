@@ -14,6 +14,7 @@ import { OngletValidation } from './components/OngletValidation';
 import { ModalNoteDeCalcul } from './components/ModalNoteDeCalcul';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { Verdict } from './components/ui/Verdict';
 import {
   Layers,
   LineChart,
@@ -201,20 +202,17 @@ export default function App() {
 
       {/* Toast de notification */}
       {notification && (
-        <div
-          className={`fixed top-16 right-4 z-50 px-4 py-2.5 rounded-xl shadow-lg text-xs font-semibold flex items-center gap-2 border transition-all duration-300 ${
-            notification.type === 'success'
-              ? 'bg-emerald-50 text-emerald-950 border-emerald-300'
-              : 'bg-rose-50 text-rose-950 border-rose-300'
-          }`}
+        <Verdict
+          etat={notification.type === 'success' ? 'ok' : 'refus'}
+          className="fixed top-16 right-4 z-50 !p-2.5 text-xs flex items-center gap-2 transition-all duration-300"
         >
           {notification.type === 'success' ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
           ) : (
-            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+            <AlertTriangle className="w-4 h-4 shrink-0" />
           )}
           <span>{notification.message}</span>
-        </div>
+        </Verdict>
       )}
 
       {/* 3. Barre des onglets de calcul */}
@@ -372,12 +370,12 @@ export default function App() {
       )}
 
       {/* 6. Pied de page discret */}
-      <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 py-3 text-center text-xs">
+      <footer className="bg-surface-appui border-t border-bordure text-texte-doux py-3 text-center text-xs">
         <div className="max-w-7xl mx-auto px-4 flex flex-wrap items-center justify-between gap-2">
           <span>
             Application de Calcul Géotechnique Eurocode 7 (EN 1997-1:2004) • Modèle PWA Client-Side
           </span>
-          <span className="font-mono text-[11px] text-slate-500">
+          <span className="font-mono text-[11px] text-texte-faible">
             Schéma v1.0 • Approche DA2* • Données persistées IndexedDB
           </span>
         </div>
