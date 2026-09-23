@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { CoucheGeotechnique, Hydrogeologie, ModeleTerrain, Referentiel, StatutGrandeur, TripletGrandeur } from '../types/geotech';
 import { Plus, Trash2, AlertTriangle, ShieldCheck, Droplets, Info } from 'lucide-react';
+import { Card } from './ui/Card';
+import { Champ } from './ui/Champ';
+import { Bouton } from './ui/Bouton';
 
 interface OngletSolProps {
   modele: ModeleTerrain;
@@ -110,93 +113,78 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
       {/* 1. Référentiel & Hydrogéologie */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Référentiel */}
-        <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs">
-          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+        <Card>
+          <h3 className="text-sm font-semibold text-texte flex items-center gap-2 mb-3">
             Référentiel Altimétrique
           </h3>
           <div className="grid grid-cols-3 gap-3 text-xs">
-            <div>
-              <label className="block text-slate-500 mb-1">Système</label>
-              <input
-                id="input-ref-systeme"
-                type="text"
-                value={modele.referentiel.systeme}
-                onChange={(e) => updateReferentiel('systeme', e.target.value)}
-                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-500 mb-1">Terrain Naturel (m)</label>
-              <input
-                id="input-ref-tn"
-                type="number"
-                step="0.05"
-                value={modele.referentiel.coteTerrainNaturel}
-                onChange={(e) => updateReferentiel('coteTerrainNaturel', parseFloat(e.target.value) || 0)}
-                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-slate-800 font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-500 mb-1">Réf. Projet 0.00 (m)</label>
-              <input
-                id="input-ref-p0"
-                type="number"
-                step="0.05"
-                value={modele.referentiel.coteReferenceProjet}
-                onChange={(e) => updateReferentiel('coteReferenceProjet', parseFloat(e.target.value) || 0)}
-                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-slate-800 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-              />
-            </div>
+            <Champ
+              id="input-ref-systeme"
+              label="Système"
+              type="text"
+              value={modele.referentiel.systeme}
+              onChange={(e) => updateReferentiel('systeme', e.target.value)}
+            />
+            <Champ
+              id="input-ref-tn"
+              label="Terrain Naturel (m)"
+              type="number"
+              step="0.05"
+              value={modele.referentiel.coteTerrainNaturel}
+              onChange={(e) => updateReferentiel('coteTerrainNaturel', parseFloat(e.target.value) || 0)}
+            />
+            <Champ
+              id="input-ref-p0"
+              label="Réf. Projet 0.00 (m)"
+              type="number"
+              step="0.05"
+              value={modele.referentiel.coteReferenceProjet}
+              onChange={(e) => updateReferentiel('coteReferenceProjet', parseFloat(e.target.value) || 0)}
+            />
           </div>
-          <p className="mt-2 text-[11px] text-slate-500 italic">
+          <p className="mt-2 text-[11px] text-texte-faible italic">
             Convention : altitudes absolues croissantes vers le haut (jamais de profondeurs relatives).
           </p>
-        </div>
+        </Card>
 
-        {/* Hydrogéologie */}
-        <div className="p-4 bg-sky-50/50 border border-sky-200 rounded-xl shadow-xs">
-          <h3 className="text-sm font-bold text-sky-950 flex items-center gap-2 mb-2">
-            <Droplets className="w-4 h-4 text-sky-600" />
+        {/* Hydrogéologie : ELS/ELU neutres, pas de code couleur — les deux chaînes ont la
+            même importance (cf. README, "jamais mélangées"). */}
+        <Card>
+          <h3 className="text-sm font-semibold text-texte flex items-center gap-2 mb-2">
+            <Droplets className="w-4 h-4 text-texte-faible" />
             Hydrogéologie (Nappe phréatique)
           </h3>
           <div className="grid grid-cols-2 gap-3 text-xs mb-2">
-            <div>
-              <label className="block font-medium text-sky-900 mb-1">Cote Caractéristique ELS (m)</label>
-              <input
-                id="input-nappe-els"
-                type="number"
-                step="0.05"
-                value={modele.hydrogeologie.nappePrincipale.coteCaracteristique}
-                onChange={(e) => updateHydro('coteCaracteristique', parseFloat(e.target.value) || 0)}
-                className="w-full px-2.5 py-1.5 bg-white border border-sky-300 rounded-lg text-sky-950 font-bold focus:ring-2 focus:ring-sky-500 focus:outline-hidden"
-              />
-            </div>
-            <div>
-              <label className="block font-medium text-rose-900 mb-1">Cote Défavorable ELU (m)</label>
-              <input
-                id="input-nappe-elu"
-                type="number"
-                step="0.05"
-                value={modele.hydrogeologie.nappePrincipale.coteDefavorableELU}
-                onChange={(e) => updateHydro('coteDefavorableELU', parseFloat(e.target.value) || 0)}
-                className="w-full px-2.5 py-1.5 bg-white border border-rose-300 rounded-lg text-rose-950 font-bold focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
-              />
-            </div>
+            <Champ
+              id="input-nappe-els"
+              label="Cote Caractéristique ELS (m)"
+              type="number"
+              step="0.05"
+              value={modele.hydrogeologie.nappePrincipale.coteCaracteristique}
+              onChange={(e) => updateHydro('coteCaracteristique', parseFloat(e.target.value) || 0)}
+            />
+            <Champ
+              id="input-nappe-elu"
+              label="Cote Défavorable ELU (m)"
+              type="number"
+              step="0.05"
+              value={modele.hydrogeologie.nappePrincipale.coteDefavorableELU}
+              onChange={(e) => updateHydro('coteDefavorableELU', parseFloat(e.target.value) || 0)}
+            />
           </div>
-          <div className="p-2 bg-white/80 border border-sky-200 rounded-lg text-[11px] text-sky-900 leading-snug">
-            <span className="font-bold text-rose-700">Point critique (clause 2.4.6.1) :</span> Les deux cotes,
+          <div className="p-2 bg-surface-appui border border-bordure rounded-rayon-petit text-[11px] text-texte-doux leading-snug">
+            <span className="font-semibold text-texte">Point critique (clause 2.4.6.1) :</span> Les deux cotes,
             caractéristique (tassements) et défavorable (pressions ELU), sont physiquement distinctes et obligatoires.
           </div>
-        </div>
+        </Card>
       </div>
 
-      {/* Alerte si rupture de jointivité */}
+      {/* Alerte si rupture de jointivité — erreur structurelle réelle, refus justifié */}
       {erreursJointivite.length > 0 && (
-        <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-900 text-xs flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+        <div className="p-3 bg-refus-fond border border-bordure rounded-rayon text-refus text-xs flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
-            <span className="font-bold">Erreur de stratigraphie (Section 4.4) :</span>
+            <span className="font-semibold">Erreur de stratigraphie (Section 4.4) :</span>
             <ul className="list-disc pl-4 mt-1 space-y-0.5 font-mono">
               {erreursJointivite.map((err, i) => (
                 <li key={i}>{err}</li>
@@ -207,15 +195,15 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
       )}
 
       {/* 2. Liste des Couches Géotechniques */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-        <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+      <div className="bg-surface border border-bordure rounded-rayon overflow-hidden">
+        <div className="px-4 py-3 bg-surface-appui border-b border-bordure flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold text-slate-800">Stratigraphie Géotechnique du Sol</h3>
-            <span className="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-medium">
+            <h3 className="text-sm font-semibold text-texte">Stratigraphie Géotechnique du Sol</h3>
+            <span className="text-xs bg-surface text-texte-doux border border-bordure px-2 py-0.5 rounded-rayon-petit font-medium">
               {modele.couches.length} couche(s) ordonnée(s)
             </span>
           </div>
-          <button
+          <Bouton
             id="btn-ajouter-couche"
             onClick={() => {
               const derniere = modele.couches[modele.couches.length - 1];
@@ -263,29 +251,28 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
               });
               setCoucheSelectionneeId(nouvelleCouche.id);
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition"
           >
             <Plus className="w-3.5 h-3.5" />
             Ajouter une couche
-          </button>
+          </Bouton>
         </div>
 
         {/* Onglets de sélection des couches */}
-        <div className="flex border-b border-slate-200 overflow-x-auto bg-slate-50/50 p-1.5 gap-1.5">
+        <div className="flex border-b border-bordure overflow-x-auto bg-surface-appui/50 p-1.5 gap-1.5">
           {modele.couches.map((c) => (
             <button
               key={c.id}
               id={`tab-couche-${c.id}`}
               onClick={() => setCoucheSelectionneeId(c.id)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition whitespace-nowrap ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-rayon-petit text-xs font-medium transition-colors whitespace-nowrap ${
                 c.id === coucheSelectionneeId
-                  ? 'bg-white text-emerald-950 shadow-xs border border-slate-200 font-bold'
-                  : 'text-slate-600 hover:bg-slate-100'
+                  ? 'bg-surface text-texte border border-bordure font-semibold'
+                  : 'text-texte-doux hover:bg-surface-appui'
               }`}
             >
               <span className="w-3 h-3 rounded-full border border-black/10" style={{ backgroundColor: c.couleurAffichage }}></span>
               <span>{c.id} : {c.nom}</span>
-              <span className="text-[11px] text-slate-400">({c.epaisseur}m)</span>
+              <span className="text-[11px] text-texte-faible">({c.epaisseur}m)</span>
             </button>
           ))}
         </div>
@@ -294,31 +281,31 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
         {coucheActive && (
           <div className="p-4 space-y-4">
             {/* Entête de couche */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-3 bg-surface-appui rounded-rayon border border-bordure text-xs">
               <div>
-                <label className="block text-slate-500 mb-1">Identifiant</label>
+                <label className="block text-texte-doux mb-1">Identifiant</label>
                 <input
                   type="text"
                   value={coucheActive.id}
                   onChange={(e) => updateCoucheChamp(coucheActive.id, { id: e.target.value })}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md bg-white font-mono font-bold"
+                  className="w-full px-2.5 py-1.5 border border-bordure rounded-rayon-petit bg-surface font-mono font-semibold"
                 />
               </div>
               <div className="sm:col-span-2">
-                <label className="block text-slate-500 mb-1">Nom géologique</label>
+                <label className="block text-texte-doux mb-1">Nom géologique</label>
                 <input
                   type="text"
                   value={coucheActive.nom}
                   onChange={(e) => updateCoucheChamp(coucheActive.id, { nom: e.target.value })}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md bg-white font-semibold"
+                  className="w-full px-2.5 py-1.5 border border-bordure rounded-rayon-petit bg-surface font-semibold"
                 />
               </div>
               <div>
-                <label className="block text-slate-500 mb-1">Nature de sol</label>
+                <label className="block text-texte-doux mb-1">Nature de sol</label>
                 <select
                   value={coucheActive.nature}
                   onChange={(e) => updateCoucheChamp(coucheActive.id, { nature: e.target.value as any })}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md bg-white"
+                  className="w-full px-2.5 py-1.5 border border-bordure rounded-rayon-petit bg-surface"
                 >
                   <option value="sable">Sable (grenu)</option>
                   <option value="argile">Argile (fin)</option>
@@ -328,57 +315,51 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                   <option value="tourbe">Tourbe</option>
                 </select>
               </div>
+              <Champ
+                label="Cote Toit (m)"
+                type="number"
+                step="0.05"
+                value={coucheActive.coteToit}
+                onChange={(e) => updateCoucheChamp(coucheActive.id, { coteToit: parseFloat(e.target.value) || 0 })}
+              />
+              <Champ
+                label="Épaisseur (m)"
+                type="number"
+                step="0.05"
+                min="0.1"
+                value={coucheActive.epaisseur}
+                onChange={(e) => updateCoucheChamp(coucheActive.id, { epaisseur: parseFloat(e.target.value) || 0.1 })}
+              />
               <div>
-                <label className="block text-slate-500 mb-1">Cote Toit (m)</label>
-                <input
-                  type="number"
-                  step="0.05"
-                  value={coucheActive.coteToit}
-                  onChange={(e) => updateCoucheChamp(coucheActive.id, { coteToit: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md bg-white font-bold text-emerald-800"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-500 mb-1">Épaisseur (m)</label>
-                <input
-                  type="number"
-                  step="0.05"
-                  min="0.1"
-                  value={coucheActive.epaisseur}
-                  onChange={(e) => updateCoucheChamp(coucheActive.id, { epaisseur: parseFloat(e.target.value) || 0.1 })}
-                  className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md bg-white font-bold"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-500 mb-1">Cote Base calculée</label>
-                <div className="px-2.5 py-1.5 bg-slate-200/80 rounded-md font-mono text-slate-700 font-bold">
+                <label className="block text-texte-doux mb-1">Cote Base calculée</label>
+                <div className="px-2.5 py-1.5 bg-surface-appui rounded-rayon-petit font-mono text-texte-doux font-semibold">
                   {(coucheActive.coteToit - coucheActive.epaisseur).toFixed(2)} m
                 </div>
               </div>
               <div>
-                <label className="block text-slate-500 mb-1">Couleur d'affichage</label>
+                <label className="block text-texte-doux mb-1">Couleur d'affichage</label>
                 <input
                   type="color"
                   value={coucheActive.couleurAffichage}
                   onChange={(e) => updateCoucheChamp(coucheActive.id, { couleurAffichage: e.target.value })}
-                  className="w-full h-8 px-1 py-0.5 border border-slate-300 rounded-md cursor-pointer"
+                  className="w-full h-8 px-1 py-0.5 border border-bordure rounded-rayon-petit cursor-pointer"
                 />
               </div>
             </div>
 
             {/* TABLEAU DES TRIPLET VALEUR / STATUT / SOURCE */}
             <div className="space-y-4">
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
-                <div className="px-3 py-2 bg-slate-100 border-b border-slate-200 text-xs font-bold text-slate-700 flex items-center justify-between">
+              <div className="border border-bordure rounded-rayon overflow-hidden">
+                <div className="px-3 py-2 bg-surface-appui border-b border-bordure text-xs font-semibold text-texte-doux flex items-center justify-between">
                   <span>Paramètres Mécaniques & Triplet de Traçabilité</span>
-                  <span className="text-[11px] font-normal text-slate-500">
+                  <span className="text-[11px] font-normal text-texte-doux">
                     Triplet obligatoire : Valeur • Statut • Source
                   </span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
+                      <tr className="bg-surface-appui text-texte-doux border-b border-bordure">
                         <th className="p-2.5 font-medium">Grandeur</th>
                         <th className="p-2.5 font-medium w-28">Valeur</th>
                         <th className="p-2.5 font-medium w-16">Unité</th>
@@ -386,10 +367,10 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                         <th className="p-2.5 font-medium">Source / Référence d'essai</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-bordure-douce">
                       {/* Poids volumique humide */}
                       <tr>
-                        <td className="p-2.5 font-medium text-slate-800">Poids volumique humide (γ_h)</td>
+                        <td className="p-2.5 font-medium text-texte-doux">Poids volumique humide (γ_h)</td>
                         <td className="p-2">
                           <input
                             type="number"
@@ -400,10 +381,10 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 v: parseFloat(e.target.value) || 0,
                               })
                             }
-                            className="w-full px-2 py-1 border border-slate-300 rounded font-semibold text-slate-900"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit font-semibold text-texte bg-surface"
                           />
                         </td>
-                        <td className="p-2 text-slate-500 font-mono">kN/m³</td>
+                        <td className="p-2 text-texte-doux font-mono">kN/m³</td>
                         <td className="p-2">
                           <select
                             value={coucheActive.poidsVolumiques.gammaHumide.statut}
@@ -412,7 +393,7 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 statut: e.target.value as any,
                               })
                             }
-                            className="w-full text-xs p-1 border border-slate-300 rounded"
+                            className="w-full text-xs p-1 border border-bordure rounded-rayon-petit bg-surface"
                           >
                             <option value="mesure">Mesure</option>
                             <option value="correle">Corrélé</option>
@@ -430,14 +411,14 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 source: e.target.value,
                               })
                             }
-                            className="w-full px-2 py-1 border border-slate-300 rounded text-slate-600 text-xs"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit text-texte-doux text-xs bg-surface"
                           />
                         </td>
                       </tr>
 
                       {/* Poids volumique saturé */}
                       <tr>
-                        <td className="p-2.5 font-medium text-slate-800">Poids volumique saturé (γ_sat)</td>
+                        <td className="p-2.5 font-medium text-texte-doux">Poids volumique saturé (γ_sat)</td>
                         <td className="p-2">
                           <input
                             type="number"
@@ -448,10 +429,10 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 v: parseFloat(e.target.value) || 0,
                               })
                             }
-                            className="w-full px-2 py-1 border border-slate-300 rounded font-semibold text-slate-900"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit font-semibold text-texte bg-surface"
                           />
                         </td>
-                        <td className="p-2 text-slate-500 font-mono">kN/m³</td>
+                        <td className="p-2 text-texte-doux font-mono">kN/m³</td>
                         <td className="p-2">
                           <select
                             value={coucheActive.poidsVolumiques.gammaSature.statut}
@@ -460,7 +441,7 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 statut: e.target.value as any,
                               })
                             }
-                            className="w-full text-xs p-1 border border-slate-300 rounded"
+                            className="w-full text-xs p-1 border border-bordure rounded-rayon-petit bg-surface"
                           >
                             <option value="mesure">Mesure</option>
                             <option value="correle">Corrélé</option>
@@ -478,14 +459,14 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 source: e.target.value,
                               })
                             }
-                            className="w-full px-2 py-1 border border-slate-300 rounded text-slate-600 text-xs"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit text-texte-doux text-xs bg-surface"
                           />
                         </td>
                       </tr>
 
                       {/* Angle de frottement effectif phi' */}
-                      <tr className="bg-emerald-50/30">
-                        <td className="p-2.5 font-bold text-emerald-950">Angle frottement effectif (φ'_k)</td>
+                      <tr>
+                        <td className="p-2.5 font-semibold text-texte">Angle frottement effectif (φ'_k)</td>
                         <td className="p-2">
                           <input
                             type="number"
@@ -496,10 +477,10 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 v: parseFloat(e.target.value) || 0,
                               })
                             }
-                            className="w-full px-2 py-1 border border-emerald-300 rounded font-bold text-emerald-900"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit font-semibold text-texte bg-surface"
                           />
                         </td>
-                        <td className="p-2 text-slate-500 font-mono">deg (°)</td>
+                        <td className="p-2 text-texte-doux font-mono">deg (°)</td>
                         <td className="p-2">
                           <select
                             value={coucheActive.resistanceDrainee.phiPrime.statut}
@@ -508,7 +489,7 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 statut: e.target.value as any,
                               })
                             }
-                            className="w-full text-xs p-1 border border-slate-300 rounded"
+                            className="w-full text-xs p-1 border border-bordure rounded-rayon-petit bg-surface"
                           >
                             <option value="mesure">Mesure</option>
                             <option value="correle">Corrélé</option>
@@ -526,14 +507,14 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 source: e.target.value,
                               })
                             }
-                            className="w-full px-2 py-1 border border-slate-300 rounded text-slate-600 text-xs"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit text-texte-doux text-xs bg-surface"
                           />
                         </td>
                       </tr>
 
                       {/* Cohésion effective c' */}
-                      <tr className="bg-emerald-50/30">
-                        <td className="p-2.5 font-bold text-emerald-950">Cohésion effective (c'_k)</td>
+                      <tr>
+                        <td className="p-2.5 font-semibold text-texte">Cohésion effective (c'_k)</td>
                         <td className="p-2">
                           <input
                             type="number"
@@ -544,10 +525,10 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 v: parseFloat(e.target.value) || 0,
                               })
                             }
-                            className="w-full px-2 py-1 border border-emerald-300 rounded font-bold text-emerald-900"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit font-semibold text-texte bg-surface"
                           />
                         </td>
-                        <td className="p-2 text-slate-500 font-mono">kPa</td>
+                        <td className="p-2 text-texte-doux font-mono">kPa</td>
                         <td className="p-2">
                           <select
                             value={coucheActive.resistanceDrainee.cPrime.statut}
@@ -556,7 +537,7 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 statut: e.target.value as any,
                               })
                             }
-                            className="w-full text-xs p-1 border border-slate-300 rounded"
+                            className="w-full text-xs p-1 border border-bordure rounded-rayon-petit bg-surface"
                           >
                             <option value="mesure">Mesure</option>
                             <option value="correle">Corrélé</option>
@@ -574,14 +555,14 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 source: e.target.value,
                               })
                             }
-                            className="w-full px-2 py-1 border border-slate-300 rounded text-slate-600 text-xs"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit text-texte-doux text-xs bg-surface"
                           />
                         </td>
                       </tr>
 
                       {/* Cohésion non drainée cu */}
                       <tr>
-                        <td className="p-2.5 font-medium text-slate-800">Cohésion non drainée (cu)</td>
+                        <td className="p-2.5 font-medium text-texte-doux">Cohésion non drainée (cu)</td>
                         <td className="p-2">
                           <input
                             type="number"
@@ -592,10 +573,10 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 v: parseFloat(e.target.value) || 0,
                               })
                             }
-                            className="w-full px-2 py-1 border border-slate-300 rounded font-semibold text-slate-900"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit font-semibold text-texte bg-surface"
                           />
                         </td>
-                        <td className="p-2 text-slate-500 font-mono">kPa</td>
+                        <td className="p-2 text-texte-doux font-mono">kPa</td>
                         <td className="p-2">
                           <select
                             value={coucheActive.resistanceNonDrainee.cuTete.statut}
@@ -604,7 +585,7 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 statut: e.target.value as any,
                               })
                             }
-                            className="w-full text-xs p-1 border border-slate-300 rounded"
+                            className="w-full text-xs p-1 border border-bordure rounded-rayon-petit bg-surface"
                           >
                             <option value="mesure">Mesure</option>
                             <option value="correle">Corrélé</option>
@@ -622,14 +603,14 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 source: e.target.value,
                               })
                             }
-                            className="w-full px-2 py-1 border border-slate-300 rounded text-slate-600 text-xs"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit text-texte-doux text-xs bg-surface"
                           />
                         </td>
                       </tr>
 
                       {/* Indice de compression Cc */}
-                      <tr className="bg-sky-50/30">
-                        <td className="p-2.5 font-bold text-sky-950">Indice de compression (Cc)</td>
+                      <tr>
+                        <td className="p-2.5 font-semibold text-texte">Indice de compression (Cc)</td>
                         <td className="p-2">
                           <input
                             type="number"
@@ -640,10 +621,10 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 v: parseFloat(e.target.value) || 0,
                               })
                             }
-                            className="w-full px-2 py-1 border border-sky-300 rounded font-bold text-sky-900"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit font-semibold text-texte bg-surface"
                           />
                         </td>
-                        <td className="p-2 text-slate-500 font-mono">-</td>
+                        <td className="p-2 text-texte-doux font-mono">-</td>
                         <td className="p-2">
                           <select
                             value={coucheActive.deformation.Cc.statut}
@@ -652,7 +633,7 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 statut: e.target.value as any,
                               })
                             }
-                            className="w-full text-xs p-1 border border-slate-300 rounded"
+                            className="w-full text-xs p-1 border border-bordure rounded-rayon-petit bg-surface"
                           >
                             <option value="mesure">Mesure</option>
                             <option value="correle">Corrélé</option>
@@ -670,14 +651,14 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 source: e.target.value,
                               })
                             }
-                            className="w-full px-2 py-1 border border-slate-300 rounded text-slate-600 text-xs"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit text-texte-doux text-xs bg-surface"
                           />
                         </td>
                       </tr>
 
                       {/* Indice de gonflement Cs */}
-                      <tr className="bg-sky-50/30">
-                        <td className="p-2.5 font-bold text-sky-950">Indice de recompression (Cs)</td>
+                      <tr>
+                        <td className="p-2.5 font-semibold text-texte">Indice de recompression (Cs)</td>
                         <td className="p-2">
                           <input
                             type="number"
@@ -688,10 +669,10 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 v: parseFloat(e.target.value) || 0,
                               })
                             }
-                            className="w-full px-2 py-1 border border-sky-300 rounded font-bold text-sky-900"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit font-semibold text-texte bg-surface"
                           />
                         </td>
-                        <td className="p-2 text-slate-500 font-mono">-</td>
+                        <td className="p-2 text-texte-doux font-mono">-</td>
                         <td className="p-2">
                           <select
                             value={coucheActive.deformation.Cs.statut}
@@ -700,7 +681,7 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 statut: e.target.value as any,
                               })
                             }
-                            className="w-full text-xs p-1 border border-slate-300 rounded"
+                            className="w-full text-xs p-1 border border-bordure rounded-rayon-petit bg-surface"
                           >
                             <option value="mesure">Mesure</option>
                             <option value="correle">Corrélé</option>
@@ -718,14 +699,14 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 source: e.target.value,
                               })
                             }
-                            className="w-full px-2 py-1 border border-slate-300 rounded text-slate-600 text-xs"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit text-texte-doux text-xs bg-surface"
                           />
                         </td>
                       </tr>
 
                       {/* Indice des vides e0 */}
-                      <tr className="bg-sky-50/30">
-                        <td className="p-2.5 font-bold text-sky-950">Indice des vides initial (e0)</td>
+                      <tr>
+                        <td className="p-2.5 font-semibold text-texte">Indice des vides initial (e0)</td>
                         <td className="p-2">
                           <input
                             type="number"
@@ -736,10 +717,10 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 v: parseFloat(e.target.value) || 0,
                               })
                             }
-                            className="w-full px-2 py-1 border border-sky-300 rounded font-bold text-sky-900"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit font-semibold text-texte bg-surface"
                           />
                         </td>
-                        <td className="p-2 text-slate-500 font-mono">-</td>
+                        <td className="p-2 text-texte-doux font-mono">-</td>
                         <td className="p-2">
                           <select
                             value={coucheActive.deformation.e0.statut}
@@ -748,7 +729,7 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 statut: e.target.value as any,
                               })
                             }
-                            className="w-full text-xs p-1 border border-slate-300 rounded"
+                            className="w-full text-xs p-1 border border-bordure rounded-rayon-petit bg-surface"
                           >
                             <option value="mesure">Mesure</option>
                             <option value="correle">Corrélé</option>
@@ -766,14 +747,14 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 source: e.target.value,
                               })
                             }
-                            className="w-full px-2 py-1 border border-slate-300 rounded text-slate-600 text-xs"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit text-texte-doux text-xs bg-surface"
                           />
                         </td>
                       </tr>
 
                       {/* Pression de préconsolidation sigma_p */}
-                      <tr className="bg-sky-50/30">
-                        <td className="p-2.5 font-bold text-sky-950">Pression préconsolidation (σ'p)</td>
+                      <tr>
+                        <td className="p-2.5 font-semibold text-texte">Pression préconsolidation (σ'p)</td>
                         <td className="p-2">
                           <input
                             type="number"
@@ -784,10 +765,10 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 v: parseFloat(e.target.value) || 0,
                               })
                             }
-                            className="w-full px-2 py-1 border border-sky-300 rounded font-bold text-sky-900"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit font-semibold text-texte bg-surface"
                           />
                         </td>
-                        <td className="p-2 text-slate-500 font-mono">kPa</td>
+                        <td className="p-2 text-texte-doux font-mono">kPa</td>
                         <td className="p-2">
                           <select
                             value={coucheActive.deformation.sigmaPrecons.statut}
@@ -796,7 +777,7 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 statut: e.target.value as any,
                               })
                             }
-                            className="w-full text-xs p-1 border border-slate-300 rounded"
+                            className="w-full text-xs p-1 border border-bordure rounded-rayon-petit bg-surface"
                           >
                             <option value="mesure">Mesure</option>
                             <option value="correle">Corrélé</option>
@@ -814,7 +795,7 @@ export const OngletSol: React.FC<OngletSolProps> = ({ modele, onUpdateModele }) 
                                 source: e.target.value,
                               })
                             }
-                            className="w-full px-2 py-1 border border-slate-300 rounded text-slate-600 text-xs"
+                            className="w-full px-2 py-1 border border-bordure rounded-rayon-petit text-texte-doux text-xs bg-surface"
                           />
                         </td>
                       </tr>
