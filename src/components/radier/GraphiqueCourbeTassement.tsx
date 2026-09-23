@@ -52,45 +52,45 @@ export const GraphiqueCourbeTassement: React.FC<GraphiqueCourbeTassementProps> =
     if (active && payload && payload.length) {
       const data: PointCourbeTassementCharge = payload[0].payload;
       return (
-        <div className="bg-white/95 backdrop-blur-xs p-3 border border-slate-200 rounded-lg shadow-md text-xs space-y-1.5 min-w-[200px]">
-          <div className="font-bold text-slate-800 border-b border-slate-100 pb-1 flex justify-between">
+        <div className="bg-surface/95 backdrop-blur-xs p-3 border border-bordure rounded-rayon text-xs space-y-1.5 min-w-[200px]">
+          <div className="font-semibold text-texte border-b border-bordure-douce pb-1 flex justify-between">
             <span>{uniteX === 'pression' ? `q = ${data.pression_kPa} kPa` : `V = ${data.chargeTotale_kN} kN`}</span>
-            <span className="text-slate-500 font-normal">
+            <span className="text-texte-doux font-normal">
               {uniteX === 'pression' ? `${data.chargeTotale_kN} kN` : `${data.pression_kPa} kPa`}
             </span>
           </div>
-          <div className="text-[11px] text-slate-500">
-            Ratio charge : <strong className="text-slate-700">{(data.ratioChargeELS * 100).toFixed(0)} % de q_ELS</strong>
+          <div className="text-[11px] text-texte-doux">
+            Ratio charge : <strong className="text-texte">{(data.ratioChargeELS * 100).toFixed(0)} % de q_ELS</strong>
           </div>
           <div className="space-y-1 pt-0.5">
             {afficherCentre && (
-              <div className="flex justify-between items-center text-sky-700">
+              <div className="flex justify-between items-center text-texte">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-sky-600 inline-block" />
+                  <span className="w-2 h-2 rounded-full bg-[#0284c7] inline-block" />
                   Centre :
                 </span>
-                <span className="font-bold font-mono">{data.tassementCentre_mm.toFixed(2)} mm</span>
+                <span className="font-semibold font-mono">{data.tassementCentre_mm.toFixed(2)} mm</span>
               </div>
             )}
             {afficherMoyen && (
-              <div className="flex justify-between items-center text-emerald-700">
+              <div className="flex justify-between items-center text-texte">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block" />
+                  <span className="w-2 h-2 rounded-full bg-[#059669] inline-block" />
                   Moyen :
                 </span>
-                <span className="font-bold font-mono">{data.tassementMoyen_mm.toFixed(2)} mm</span>
+                <span className="font-semibold font-mono">{data.tassementMoyen_mm.toFixed(2)} mm</span>
               </div>
             )}
             {afficherCoin && (
-              <div className="flex justify-between items-center text-amber-700">
+              <div className="flex justify-between items-center text-texte">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-600 inline-block" />
+                  <span className="w-2 h-2 rounded-full bg-[#d97706] inline-block" />
                   Coin / Angle :
                 </span>
-                <span className="font-bold font-mono">{data.tassementCoin_mm.toFixed(2)} mm</span>
+                <span className="font-semibold font-mono">{data.tassementCoin_mm.toFixed(2)} mm</span>
               </div>
             )}
-            <div className="flex justify-between items-center text-slate-600 border-t border-slate-100 pt-1">
+            <div className="flex justify-between items-center text-texte-doux border-t border-bordure-douce pt-1">
               <span>Différentiel Δs :</span>
               <span className="font-mono">{data.tassementDifferentiel_mm.toFixed(2)} mm</span>
             </div>
@@ -104,17 +104,17 @@ export const GraphiqueCourbeTassement: React.FC<GraphiqueCourbeTassementProps> =
   return (
     <div className="space-y-3">
       {/* Barre d'outils et contrôles du graphique */}
-      <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-surface-appui p-2.5 rounded-rayon border border-bordure">
         <div className="flex items-center gap-3">
-          <span className="font-semibold text-slate-700">Axe d'effort :</span>
-          <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 text-[11px] font-semibold">
+          <span className="font-semibold text-texte-doux">Axe d'effort :</span>
+          <div className="inline-flex rounded-rayon-petit border border-bordure bg-surface p-0.5 text-[11px] font-semibold">
             <button
               type="button"
               onClick={() => setUniteX('pression')}
-              className={`px-2.5 py-1 rounded-md transition ${
+              className={`px-2.5 py-1 rounded-rayon-petit transition-colors ${
                 uniteX === 'pression'
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-surface-appui text-texte border border-bordure'
+                  : 'text-texte-doux hover:text-texte'
               }`}
             >
               Pression q (kPa)
@@ -122,10 +122,10 @@ export const GraphiqueCourbeTassement: React.FC<GraphiqueCourbeTassementProps> =
             <button
               type="button"
               onClick={() => setUniteX('charge')}
-              className={`px-2.5 py-1 rounded-md transition ${
+              className={`px-2.5 py-1 rounded-rayon-petit transition-colors ${
                 uniteX === 'charge'
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-surface-appui text-texte border border-bordure'
+                  : 'text-texte-doux hover:text-texte'
               }`}
             >
               Charge totale V (kN)
@@ -134,40 +134,40 @@ export const GraphiqueCourbeTassement: React.FC<GraphiqueCourbeTassementProps> =
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold text-slate-700 mr-1">Courbes :</span>
-          <label className="flex items-center gap-1 cursor-pointer select-none text-sky-800 bg-sky-50 px-2 py-1 rounded border border-sky-200 font-medium">
+          <span className="font-semibold text-texte-doux mr-1">Courbes :</span>
+          <label className="flex items-center gap-1.5 cursor-pointer select-none text-texte-doux bg-surface px-2 py-1 rounded-rayon-petit border border-bordure font-medium">
+            <span className="w-2 h-2 rounded-full bg-[#0284c7] inline-block" />
             <input
               type="checkbox"
               checked={afficherCentre}
               onChange={(e) => setAfficherCentre(e.target.checked)}
-              className="rounded text-sky-600 focus:ring-sky-500"
             />
             Centre
           </label>
-          <label className="flex items-center gap-1 cursor-pointer select-none text-emerald-800 bg-emerald-50 px-2 py-1 rounded border border-emerald-200 font-medium">
+          <label className="flex items-center gap-1.5 cursor-pointer select-none text-texte-doux bg-surface px-2 py-1 rounded-rayon-petit border border-bordure font-medium">
+            <span className="w-2 h-2 rounded-full bg-[#059669] inline-block" />
             <input
               type="checkbox"
               checked={afficherMoyen}
               onChange={(e) => setAfficherMoyen(e.target.checked)}
-              className="rounded text-emerald-600 focus:ring-emerald-500"
             />
             Moyen
           </label>
-          <label className="flex items-center gap-1 cursor-pointer select-none text-amber-800 bg-amber-50 px-2 py-1 rounded border border-amber-200 font-medium">
+          <label className="flex items-center gap-1.5 cursor-pointer select-none text-texte-doux bg-surface px-2 py-1 rounded-rayon-petit border border-bordure font-medium">
+            <span className="w-2 h-2 rounded-full bg-[#d97706] inline-block" />
             <input
               type="checkbox"
               checked={afficherCoin}
               onChange={(e) => setAfficherCoin(e.target.checked)}
-              className="rounded text-amber-600 focus:ring-amber-500"
             />
             Coin
           </label>
-          <label className="flex items-center gap-1 cursor-pointer select-none text-rose-800 bg-rose-50 px-2 py-1 rounded border border-rose-200 font-medium">
+          <label className="flex items-center gap-1.5 cursor-pointer select-none text-texte-doux bg-surface px-2 py-1 rounded-rayon-petit border border-bordure font-medium">
+            <span className="w-2 h-2 rounded-full bg-refus inline-block" />
             <input
               type="checkbox"
               checked={afficherSeuil}
               onChange={(e) => setAfficherSeuil(e.target.checked)}
-              className="rounded text-rose-600 focus:ring-rose-500"
             />
             Seuil {seuilAdmissible_mm} mm
           </label>
@@ -181,25 +181,25 @@ export const GraphiqueCourbeTassement: React.FC<GraphiqueCourbeTassementProps> =
             data={points}
             margin={{ top: 10, right: 30, left: 10, bottom: 25 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#eceae4" />
             <XAxis
               dataKey={xKey}
               type="number"
               domain={['dataMin', 'dataMax']}
-              stroke="#64748b"
+              stroke="#6a6862"
               fontSize={11}
               tickLine={false}
               label={{
                 value: xLabel,
                 position: 'insideBottom',
                 offset: -15,
-                fill: '#475569',
+                fill: '#4a4842',
                 fontSize: 12,
                 fontWeight: 600,
               }}
             />
             <YAxis
-              stroke="#64748b"
+              stroke="#6a6862"
               fontSize={11}
               tickLine={false}
               label={{
@@ -207,7 +207,7 @@ export const GraphiqueCourbeTassement: React.FC<GraphiqueCourbeTassementProps> =
                 angle: -90,
                 position: 'insideLeft',
                 offset: 5,
-                fill: '#475569',
+                fill: '#4a4842',
                 fontSize: 12,
                 fontWeight: 600,
               }}
@@ -222,13 +222,13 @@ export const GraphiqueCourbeTassement: React.FC<GraphiqueCourbeTassementProps> =
             {/* Repère charge de service ELS actuelle */}
             <ReferenceLine
               x={xValeurActuelle}
-              stroke="#0f172a"
+              stroke="#1a1a1a"
               strokeDasharray="4 4"
               strokeWidth={1.5}
               label={{
                 value: `Service ELS (${xValeurActuelle} ${uniteX === 'pression' ? 'kPa' : 'kN'})`,
                 position: 'insideTopLeft',
-                fill: '#0f172a',
+                fill: '#1a1a1a',
                 fontSize: 10,
                 fontWeight: 'bold',
               }}
@@ -238,13 +238,13 @@ export const GraphiqueCourbeTassement: React.FC<GraphiqueCourbeTassementProps> =
             {afficherSeuil && (
               <ReferenceLine
                 y={seuilAdmissible_mm}
-                stroke="#e11d48"
+                stroke="#a52121"
                 strokeDasharray="5 5"
                 strokeWidth={1.5}
                 label={{
                   value: `Admissible ELS (${seuilAdmissible_mm} mm)`,
                   position: 'insideBottomRight',
-                  fill: '#e11d48',
+                  fill: '#a52121',
                   fontSize: 10,
                   fontWeight: 'bold',
                 }}
@@ -323,24 +323,24 @@ export const GraphiqueCourbeTassement: React.FC<GraphiqueCourbeTassementProps> =
       </div>
 
       {/* Cartouche d'analyse et rigidité apparente au point ELS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-surface-appui border border-bordure rounded-rayon text-xs">
         <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-emerald-600 shrink-0" />
+          <Activity className="w-4 h-4 text-texte-faible shrink-0" />
           <div>
-            <span className="text-slate-500 block text-[11px]">Module de réaction apparent ks</span>
-            <span className="font-extrabold text-slate-800">
-              {ks_MNm3.toFixed(1)} <span className="font-normal text-slate-500 text-[10px]">MN/m³ (kPa/mm)</span>
+            <span className="text-texte-doux block text-[11px]">Module de réaction apparent ks</span>
+            <span className="font-semibold text-texte font-mono tabular-nums">
+              {ks_MNm3.toFixed(1)} <span className="font-normal text-texte-doux text-[10px]">MN/m³ (kPa/mm)</span>
             </span>
           </div>
         </div>
         <div>
-          <span className="text-slate-500 block text-[11px]">Raideur globale verticale Kv</span>
-          <span className="font-extrabold text-slate-800">
-            {Kv_MNm.toFixed(0)} <span className="font-normal text-slate-500 text-[10px]">MN/m</span>
+          <span className="text-texte-doux block text-[11px]">Raideur globale verticale Kv</span>
+          <span className="font-semibold text-texte font-mono tabular-nums">
+            {Kv_MNm.toFixed(0)} <span className="font-normal text-texte-doux text-[10px]">MN/m</span>
           </span>
         </div>
-        <div className="flex items-center gap-1.5 text-slate-600 text-[11px] leading-tight">
-          <Info className="w-4 h-4 text-slate-400 shrink-0" />
+        <div className="flex items-center gap-1.5 text-texte-doux text-[11px] leading-tight">
+          <Info className="w-4 h-4 text-texte-faible shrink-0" />
           <span>
             Non-linéarité issue des phases de recompression (<span className="font-mono">Cs</span>) et compression vierge (<span className="font-mono">Cc</span>).
           </span>
