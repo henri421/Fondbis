@@ -17,6 +17,7 @@ export default defineConfig(({ command }) => {
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
         manifest: {
           id: '.',
+          lang: 'fr',
           name: 'GeoTech EC7 - Calculs Géotechniques Eurocode 7',
           short_name: 'GeoTechEC7',
           description: "Application PWA d'ingénierie géotechnique conforme à l'Eurocode 7 (EN 1997-1:2004).",
