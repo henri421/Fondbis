@@ -9,12 +9,13 @@ import {
   Activity,
   CheckCircle2,
   AlertTriangle,
-  Layers,
-  ArrowRight,
   TrendingDown,
   Compass,
   FileText,
 } from 'lucide-react';
+import { Card } from '../ui/Card';
+import { Verdict } from '../ui/Verdict';
+import { Champ } from '../ui/Champ';
 
 interface VuePieuTransversalProps {
   diametre: number;
@@ -103,11 +104,13 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
   }, [resultat]);
 
   // Lois p-y réellement mobilisées le long du fût (utile en mode "Auto", où la loi
-  // effectivement appliquée à chaque couche n'est sinon visible que dans le tableau détaillé)
-  const STYLE_LOI: Record<string, { label: string; classes: string }> = {
-    matlock: { label: 'Matlock (argile)', classes: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-    reese: { label: 'Reese (sable)', classes: 'bg-amber-50 text-amber-700 border-amber-200' },
-    pressiometrique: { label: 'Pressiométrique', classes: 'bg-rose-50 text-rose-700 border-rose-200' },
+  // effectivement appliquée à chaque couche n'est sinon visible que dans le tableau détaillé).
+  // Badges neutres : la loi appliquée est une information, pas un verdict — pas de code
+  // couleur par famille (cf. DESIGN.md, "une couleur de sens ne sert jamais de décor").
+  const LABEL_LOI: Record<string, string> = {
+    matlock: 'Matlock (argile)',
+    reese: 'Reese (sable)',
+    pressiometrique: 'Pressiométrique',
   };
   const loisAppliquees = useMemo(() => {
     return Array.from(new Set(resultat.profils.map((p) => p.familleAppliquee)));
@@ -145,43 +148,32 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
   return (
     <div className="space-y-6">
       {/* Panneau de contrôle des sollicitations transversales */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-        <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">
-            Effort tranchant en tête H (kN)
-          </label>
-          <input
-            type="number"
-            value={chargeH}
-            onChange={(e) => setChargeH(parseFloat(e.target.value) || 0)}
-            className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono"
-            step="10"
-          />
-          <span className="text-[11px] text-slate-400">Charge horizontale ELU</span>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-surface-appui border border-bordure rounded-rayon">
+        <Champ
+          label="Effort tranchant en tête H (kN)"
+          type="number"
+          value={chargeH}
+          onChange={(e) => setChargeH(parseFloat(e.target.value) || 0)}
+          step="10"
+        />
+        <div className="text-[11px] text-texte-faible -mt-2">Charge horizontale ELU</div>
+
+        <Champ
+          label="Moment appliqué M (kNm)"
+          type="number"
+          value={momentM}
+          onChange={(e) => setMomentM(parseFloat(e.target.value) || 0)}
+          step="10"
+        />
 
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">
-            Moment appliqué M (kNm)
-          </label>
-          <input
-            type="number"
-            value={momentM}
-            onChange={(e) => setMomentM(parseFloat(e.target.value) || 0)}
-            className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 font-mono"
-            step="10"
-          />
-          <span className="text-[11px] text-slate-400">Moment fléchissant en tête</span>
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">
+          <label className="block text-texte-faible text-[11px] uppercase tracking-wide mb-1">
             Famille de lois p-y (EN 1997-1 §7.7)
           </label>
           <select
             value={familleCourbe}
             onChange={(e) => setFamilleCourbe(e.target.value as FamilleCourbePy)}
-            className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500"
+            className="w-full px-3 py-1.5 text-sm bg-surface border border-bordure rounded-rayon-petit"
           >
             <option value="automatique">Auto (selon lithologie)</option>
             <option value="reese">Reese (Sables frottants)</option>
@@ -189,25 +181,23 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
             <option value="pressiometrique">Pressiométrique (Ménard)</option>
           </select>
           <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-            <span className="text-[11px] text-slate-400">
+            <span className="text-[11px] text-texte-faible">
               {familleCourbe === 'automatique' ? 'Appliquée par couche :' : 'Formulation de raideur de sol'}
             </span>
             {familleCourbe === 'automatique' &&
               loisAppliquees.map((loi) => (
                 <span
                   key={loi}
-                  className={`px-1.5 py-0.5 rounded-md border text-[10px] font-semibold ${
-                    STYLE_LOI[loi]?.classes ?? 'bg-slate-50 text-slate-600 border-slate-200'
-                  }`}
+                  className="px-1.5 py-0.5 rounded-rayon-petit border border-bordure bg-surface text-[10px] font-semibold text-texte-doux"
                 >
-                  {STYLE_LOI[loi]?.label ?? loi}
+                  {LABEL_LOI[loi] ?? loi}
                 </span>
               ))}
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">
+          <label className="block text-texte-faible text-[11px] uppercase tracking-wide mb-1">
             Condition en tête
           </label>
           <div className="flex items-center gap-2 mt-2">
@@ -216,22 +206,22 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
               id="cb-rot-bloquee"
               checked={rotationBloquee}
               onChange={(e) => setRotationBloquee(e.target.checked)}
-              className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+              className="w-4 h-4 rounded border-bordure"
             />
-            <label htmlFor="cb-rot-bloquee" className="text-xs text-slate-700 cursor-pointer">
+            <label htmlFor="cb-rot-bloquee" className="text-xs text-texte cursor-pointer">
               Tête bloquée en rotation (θ = 0)
             </label>
           </div>
-          <span className="text-[11px] text-slate-400 block mt-1">Ex: liaison rigide à un radier</span>
+          <span className="text-[11px] text-texte-faible block mt-1">Ex: liaison rigide à un radier</span>
         </div>
       </div>
 
       {familleCourbe === 'pressiometrique' && (
-        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+        <Card>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-rose-500" />
-              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+              <FileText className="w-4 h-4 text-texte-faible" />
+              <span className="text-xs font-semibold text-texte-faible uppercase tracking-wide">
                 Mesures pressiométriques réelles (EN 1997-1 §7.7 / NF P 94-262)
               </span>
             </div>
@@ -240,10 +230,10 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
                 type="button"
                 onClick={() => setModeSaisieManuellePMT(false)}
                 disabled={sondagesPMT.length === 0}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${
+                className={`px-2.5 py-1 text-xs font-medium rounded-rayon-petit border transition-colors ${
                   !modeSaisieManuellePMT && sondagesPMT.length > 0
-                    ? 'bg-rose-600 text-white border-rose-600'
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100 disabled:opacity-40'
+                    ? 'bg-surface-appui text-texte border-bordure'
+                    : 'bg-surface text-texte-doux border-bordure hover:bg-surface-appui disabled:opacity-40'
                 }`}
               >
                 Sondage in situ ({sondagesPMT.length})
@@ -251,10 +241,10 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
               <button
                 type="button"
                 onClick={() => setModeSaisieManuellePMT(true)}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-colors ${
+                className={`px-2.5 py-1 text-xs font-medium rounded-rayon-petit border transition-colors ${
                   modeSaisieManuellePMT
-                    ? 'bg-rose-600 text-white border-rose-600'
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                    ? 'bg-surface-appui text-texte border-bordure'
+                    : 'bg-surface text-texte-doux border-bordure hover:bg-surface-appui'
                 }`}
               >
                 Saisie directe
@@ -263,15 +253,15 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
           </div>
 
           {!modeSaisieManuellePMT && sondagesPMT.length > 0 ? (
-            <div className="flex items-center gap-4 bg-white p-3 rounded-lg border border-slate-200">
+            <div className="flex items-center gap-4 bg-surface-appui p-3 rounded-rayon-petit border border-bordure mt-3">
               <div className="flex-1">
-                <label className="block text-xs font-medium text-slate-600 mb-1">
+                <label className="block text-texte-faible text-[11px] uppercase tracking-wide mb-1">
                   Sondage PMT de référence (interpolé nœud par nœud sur z)
                 </label>
                 <select
                   value={idPMTActif}
                   onChange={(e) => setSondagePMTSelectionne(e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500"
+                  className="w-full px-3 py-1.5 text-sm bg-surface border border-bordure rounded-rayon-petit"
                 >
                   {sondagesPMT.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -280,51 +270,41 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
                   ))}
                 </select>
               </div>
-              <div className="text-xs text-slate-500 pt-5">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
+              <div className="text-xs text-texte-doux pt-5">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-rayon-petit bg-ok-fond text-ok font-medium">
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   Profil in situ relié
                 </span>
               </div>
             </div>
           ) : modeSaisieManuellePMT ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white p-3 rounded-lg border border-slate-200">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Module pressiométrique E<sub>M</sub> [MPa]
-                </label>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0.5"
-                  value={emManuel}
-                  onChange={(e) => setEmManuel(parseFloat(e.target.value) || 1)}
-                  className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Pression limite nette p<sub>l</sub>* [MPa]
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0.05"
-                  value={plNetteManuelle}
-                  onChange={(e) => setPlNetteManuelle(parseFloat(e.target.value) || 0.1)}
-                  className="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500"
-                />
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-surface-appui p-3 rounded-rayon-petit border border-bordure mt-3">
+              <Champ
+                label="Module pressiométrique EM [MPa]"
+                type="number"
+                step="0.5"
+                min="0.5"
+                value={emManuel}
+                onChange={(e) => setEmManuel(parseFloat(e.target.value) || 1)}
+              />
+              <Champ
+                label="Pression limite nette pl* [MPa]"
+                type="number"
+                step="0.1"
+                min="0.05"
+                value={plNetteManuelle}
+                onChange={(e) => setPlNetteManuelle(parseFloat(e.target.value) || 0.1)}
+              />
             </div>
           ) : (
-            <div className="flex items-start gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900">
-              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+            <div className="flex items-start gap-2.5 p-3 bg-alerte-fond border border-bordure rounded-rayon text-alerte mt-3">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
               <div className="text-xs space-y-1">
                 <p className="font-semibold">
                   Aucun sondage pressiométrique (PMT) dans la campagne d’essais
                 </p>
                 <p>
-                  Conformément au CDC §10 et §13, aucun module E<sub>M</sub> ni pression limite p<sub>l</sub>*
+                  Conformément au CDC §10 et §13, aucun module EM ni pression limite pl*
                   n’est inventé à partir des modules de déformation. Vous pouvez basculer en mode « Saisie directe »
                   ci-dessus ou renseigner un sondage PMT dans les campagnes d’essai. En attendant, un repli rigoureux
                   sur les formulations de sol intrinsèques est appliqué.
@@ -332,15 +312,15 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
               </div>
             </div>
           )}
-        </div>
+        </Card>
       )}
 
       {/* Avertissements du solveur / CDC */}
       {resultat.convergence.avertissements.length > 0 && (
-        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
+        <div className="p-3 bg-alerte-fond border border-bordure rounded-rayon space-y-1">
           {resultat.convergence.avertissements.map((av, idx) => (
-            <div key={idx} className="flex items-start gap-2 text-xs text-amber-900">
-              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-600" />
+            <div key={idx} className="flex items-start gap-2 text-xs text-alerte">
+              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
               <span>{av}</span>
             </div>
           ))}
@@ -349,83 +329,83 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
 
       {/* Cartes d'indicateurs clés */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs">
-          <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+        <Card>
+          <div className="flex items-center justify-between text-xs text-texte-doux mb-1">
             <span>Flèche en tête u₀</span>
-            <Activity className="w-4 h-4 text-sky-500" />
+            <Activity className="w-4 h-4 text-texte-faible" />
           </div>
-          <div className="text-xl font-bold text-slate-800 font-mono">
+          <div className="text-xl font-semibold text-texte font-mono tabular-nums">
             {resultat.deplacementTete_mm.toFixed(2)}{' '}
-            <span className="text-xs font-normal text-slate-500">mm</span>
+            <span className="text-xs font-normal text-texte-doux">mm</span>
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">
+          <div className="text-[11px] text-texte-faible mt-1">
             Flèche max = {deplacementMaxAbs.toFixed(2)} mm
           </div>
-        </div>
+        </Card>
 
-        <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs">
-          <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+        <Card>
+          <div className="flex items-center justify-between text-xs text-texte-doux mb-1">
             <span>Moment Max M_max</span>
-            <TrendingDown className="w-4 h-4 text-amber-500" />
+            <TrendingDown className="w-4 h-4 text-texte-faible" />
           </div>
-          <div className="text-xl font-bold text-slate-800 font-mono">
+          <div className="text-xl font-semibold text-texte font-mono tabular-nums">
             {resultat.momentMaxAbsolu.toFixed(1)}{' '}
-            <span className="text-xs font-normal text-slate-500">kNm</span>
+            <span className="text-xs font-normal text-texte-doux">kNm</span>
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">
+          <div className="text-[11px] text-texte-faible mt-1">
             à z = {resultat.profondeurMomentMax.toFixed(2)} m
           </div>
-        </div>
+        </Card>
 
-        <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs">
-          <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+        <Card>
+          <div className="flex items-center justify-between text-xs text-texte-doux mb-1">
             <span>Rotation en tête</span>
-            <Compass className="w-4 h-4 text-emerald-500" />
+            <Compass className="w-4 h-4 text-texte-faible" />
           </div>
-          <div className="text-xl font-bold text-slate-800 font-mono">
+          <div className="text-xl font-semibold text-texte font-mono tabular-nums">
             {resultat.rotationTete_mrad.toFixed(2)}{' '}
-            <span className="text-xs font-normal text-slate-500">mrad</span>
+            <span className="text-xs font-normal text-texte-doux">mrad</span>
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">
+          <div className="text-[11px] text-texte-faible mt-1">
             {rotationBloquee ? 'Encastrement parfait' : 'Tête libre'}
           </div>
-        </div>
+        </Card>
 
-        <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs">
-          <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+        <Verdict etat={resultat.convergence.converge ? 'ok' : 'refus'}>
+          <div className="flex items-center justify-between text-xs mb-1">
             <span>Convergence p-y</span>
             {resultat.convergence.converge ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <CheckCircle2 className="w-4 h-4" />
             ) : (
-              <AlertTriangle className="w-4 h-4 text-rose-500" />
+              <AlertTriangle className="w-4 h-4" />
             )}
           </div>
-          <div className="text-xl font-bold text-slate-800 font-mono">
+          <div className="text-xl font-mono tabular-nums">
             {resultat.convergence.iterations}{' '}
-            <span className="text-xs font-normal text-slate-500">itér.</span>
+            <span className="text-xs font-normal">itér.</span>
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">
+          <div className="text-[11px] font-normal mt-1">
             Résidu : {resultat.convergence.residuFinal.toExponential(2)}
           </div>
-        </div>
+        </Verdict>
       </div>
 
       {/* Visualisation graphique des profils Déplacement & Moment */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-5 border border-slate-200 rounded-xl shadow-xs">
+      <Card className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Graphique 1 : Déplacement transversal u(z) */}
         <div className="flex flex-col items-center">
-          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block" />
+          <h4 className="text-xs font-semibold text-texte-doux uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#0284c7] inline-block" />
             Déplacement horizontal u(z) [mm]
           </h4>
-          <svg width={svgWidth} height={svgHeight} className="border border-slate-100 rounded-lg bg-slate-50/50">
+          <svg width={svgWidth} height={svgHeight} className="border border-bordure-douce rounded-rayon-petit bg-surface-appui/50">
             {/* Axe central x = 0 */}
             <line
               x1={padX + plotW / 2}
               y1={padY}
               x2={padX + plotW / 2}
               y2={padY + plotH}
-              stroke="#cbd5e1"
+              stroke="#c8c6c0"
               strokeDasharray="3 3"
             />
             {/* Ligne du pieu */}
@@ -446,33 +426,33 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
               const y = zScale(prof);
               return (
                 <g key={pct}>
-                  <line x1={padX - 4} y1={y} x2={padX} y2={y} stroke="#94a3b8" />
-                  <text x={padX - 8} y={y + 3} textAnchor="end" fontSize="9" fill="#64748b">
+                  <line x1={padX - 4} y1={y} x2={padX} y2={y} stroke="#9a978f" />
+                  <text x={padX - 8} y={y + 3} textAnchor="end" fontSize="9" fill="#6a6862">
                     {prof.toFixed(1)}m
                   </text>
                 </g>
               );
             })}
           </svg>
-          <div className="text-[11px] text-slate-500 mt-2">
+          <div className="text-[11px] text-texte-doux mt-2">
             u en tête : <strong>{resultat.deplacementTete_mm.toFixed(2)} mm</strong>
           </div>
         </div>
 
         {/* Graphique 2 : Moment fléchissant M(z) */}
         <div className="flex flex-col items-center">
-          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
+          <h4 className="text-xs font-semibold text-texte-doux uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#d97706] inline-block" />
             Moment fléchissant M(z) [kNm]
           </h4>
-          <svg width={svgWidth} height={svgHeight} className="border border-slate-100 rounded-lg bg-slate-50/50">
+          <svg width={svgWidth} height={svgHeight} className="border border-bordure-douce rounded-rayon-petit bg-surface-appui/50">
             {/* Axe central M = 0 */}
             <line
               x1={padX + plotW / 2}
               y1={padY}
               x2={padX + plotW / 2}
               y2={padY + plotH}
-              stroke="#cbd5e1"
+              stroke="#c8c6c0"
               strokeDasharray="3 3"
             />
             {/* Courbe du moment */}
@@ -490,34 +470,34 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
               const y = zScale(prof);
               return (
                 <g key={pct}>
-                  <line x1={padX - 4} y1={y} x2={padX} y2={y} stroke="#94a3b8" />
-                  <text x={padX - 8} y={y + 3} textAnchor="end" fontSize="9" fill="#64748b">
+                  <line x1={padX - 4} y1={y} x2={padX} y2={y} stroke="#9a978f" />
+                  <text x={padX - 8} y={y + 3} textAnchor="end" fontSize="9" fill="#6a6862">
                     {prof.toFixed(1)}m
                   </text>
                 </g>
               );
             })}
           </svg>
-          <div className="text-[11px] text-slate-500 mt-2">
+          <div className="text-[11px] text-texte-doux mt-2">
             M_max = <strong>{resultat.momentMaxAbsolu.toFixed(1)} kNm</strong> à z ={' '}
             {resultat.profondeurMomentMax.toFixed(2)} m
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Tableau détaillé le long du pieu */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-        <div className="p-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-          <span className="text-xs font-bold text-slate-700">
+      <div className="bg-surface border border-bordure rounded-rayon overflow-hidden">
+        <div className="p-3 bg-surface-appui border-b border-bordure flex justify-between items-center">
+          <span className="text-xs font-semibold text-texte-doux">
             Profil numérique le long du pieu (Discrétisation éléments finis)
           </span>
-          <span className="text-xs text-slate-400 font-mono">
+          <span className="text-xs text-texte-faible font-mono">
             {resultat.profils.length} nœuds
           </span>
         </div>
         <div className="max-h-60 overflow-y-auto">
           <table className="w-full text-xs text-left">
-            <thead className="bg-slate-50 text-slate-600 sticky top-0 border-b border-slate-200">
+            <thead className="bg-surface-appui text-texte-doux sticky top-0 border-b border-bordure">
               <tr>
                 <th className="px-3 py-2">Profondeur z (m)</th>
                 <th className="px-3 py-2">Cote (m)</th>
@@ -529,29 +509,25 @@ export const VuePieuTransversal: React.FC<VuePieuTransversalProps> = ({
                 <th className="px-3 py-2">Raideur ksec (kN/m²)</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 font-mono">
+            <tbody className="divide-y divide-bordure-douce font-mono">
               {resultat.profils.map((p, idx) => (
-                <tr key={idx} className="hover:bg-slate-50">
-                  <td className="px-3 py-1.5 font-sans font-medium text-slate-700">
+                <tr key={idx} className="hover:bg-surface-appui">
+                  <td className="px-3 py-1.5 font-sans font-medium text-texte-doux">
                     {p.profondeur.toFixed(2)}
                   </td>
-                  <td className="px-3 py-1.5 text-slate-500">{p.cote.toFixed(2)}</td>
+                  <td className="px-3 py-1.5 text-texte-doux">{p.cote.toFixed(2)}</td>
                   <td className="px-3 py-1.5 font-sans text-[11px]">
-                    <span
-                      className={`px-1.5 py-0.5 rounded-md border text-[10px] font-semibold ${
-                        STYLE_LOI[p.familleAppliquee]?.classes ?? 'bg-slate-50 text-slate-600 border-slate-200'
-                      }`}
-                    >
-                      {STYLE_LOI[p.familleAppliquee]?.label ?? p.familleAppliquee}
+                    <span className="px-1.5 py-0.5 rounded-rayon-petit border border-bordure bg-surface-appui text-[10px] font-semibold text-texte-doux">
+                      {LABEL_LOI[p.familleAppliquee] ?? p.familleAppliquee}
                     </span>
                   </td>
-                  <td className="px-3 py-1.5 text-sky-700 font-bold">
+                  <td className="px-3 py-1.5 text-texte font-semibold">
                     {p.ux_mm.toFixed(3)}
                   </td>
-                  <td className="px-3 py-1.5 text-amber-700">{p.moment.toFixed(1)}</td>
-                  <td className="px-3 py-1.5 text-slate-600">{p.tranchant.toFixed(1)}</td>
-                  <td className="px-3 py-1.5 text-slate-600">{p.reactionSol_p.toFixed(1)}</td>
-                  <td className="px-3 py-1.5 text-slate-500">{p.raideurSecante_ksec.toFixed(0)}</td>
+                  <td className="px-3 py-1.5 text-texte">{p.moment.toFixed(1)}</td>
+                  <td className="px-3 py-1.5 text-texte-doux">{p.tranchant.toFixed(1)}</td>
+                  <td className="px-3 py-1.5 text-texte-doux">{p.reactionSol_p.toFixed(1)}</td>
+                  <td className="px-3 py-1.5 text-texte-faible">{p.raideurSecante_ksec.toFixed(0)}</td>
                 </tr>
               ))}
             </tbody>
