@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { ModeleTerrain, OuvrageSoutenement } from '../types/geotech';
 import { verifierMurEnLELU } from '../modules/soutenement/murEnL';
-import { ShieldAlert, ShieldCheck, Layers, ArrowRight, Shield, Activity } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, Activity, Shield } from 'lucide-react';
 import { OngletParoiPhasee } from './soutenement/OngletParoiPhasee';
+import { Card } from './ui/Card';
+import { Verdict } from './ui/Verdict';
+import { Champ } from './ui/Champ';
 
 interface OngletSoutenementProps {
   modele: ModeleTerrain;
@@ -48,30 +51,30 @@ export const OngletSoutenement: React.FC<OngletSoutenementProps> = ({ modele, on
   return (
     <div className="space-y-5">
       {/* Sélecteur de niveau de modélisation du Module C */}
-      <div className="bg-white border border-slate-200 rounded-xl p-1.5 shadow-xs flex items-center gap-2">
+      <div className="bg-surface border border-bordure rounded-rayon p-1.5 flex items-center gap-2">
         <button
           type="button"
           onClick={() => setSousOnglet('paroiPhasee')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition ${
+          className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-rayon-petit text-xs font-semibold transition-colors ${
             sousOnglet === 'paroiPhasee'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
+              ? 'bg-surface-appui text-texte border border-bordure'
+              : 'text-texte-doux hover:bg-surface-appui'
           }`}
         >
-          <Activity className="w-4 h-4 text-emerald-400" />
+          <Activity className="w-4 h-4" />
           <span>Niveau 2 : Paroi Flexible Phasée (Poutre-ressorts §8.4)</span>
         </button>
 
         <button
           type="button"
           onClick={() => setSousOnglet('murEnL')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition ${
+          className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-rayon-petit text-xs font-semibold transition-colors ${
             sousOnglet === 'murEnL'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
+              ? 'bg-surface-appui text-texte border border-bordure'
+              : 'text-texte-doux hover:bg-surface-appui'
           }`}
         >
-          <Shield className="w-4 h-4 text-amber-400" />
+          <Shield className="w-4 h-4" />
           <span>Niveau 1 : Mur Rigide en L (Équilibre limite §8.3)</span>
         </button>
       </div>
@@ -82,258 +85,218 @@ export const OngletSoutenement: React.FC<OngletSoutenementProps> = ({ modele, on
         <>
           {/* 1. Géométrie et Surcharge du Mur en L */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs">
-          <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
-            1. Géométrie du Mur en L (Section 8.2)
-          </h3>
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div>
-              <label className="block text-slate-500 mb-1">Hauteur totale H (m)</label>
-              <input
-                type="number"
-                step="0.2"
-                min="1.0"
-                value={murActif.hauteurTotale}
-                onChange={(e) => updateChamp('hauteurTotale', parseFloat(e.target.value) || 2)}
-                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg font-bold text-slate-900"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-500 mb-1">Largeur semelle B (m)</label>
-              <input
-                type="number"
-                step="0.2"
-                min="0.8"
-                value={murActif.largeurSemelleB}
-                onChange={(e) => updateChamp('largeurSemelleB', parseFloat(e.target.value) || 1)}
-                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg font-bold text-slate-900"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-500 mb-1">Cote Tête de mur (m)</label>
-              <input
-                type="number"
-                step="0.1"
-                value={murActif.coteTete}
-                onChange={(e) => updateChamp('coteTete', parseFloat(e.target.value) || 0)}
-                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sky-800 font-bold"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-500 mb-1">Cote Fond fouille (m)</label>
-              <input
-                type="number"
-                step="0.1"
-                value={murActif.coteFondFouille}
-                onChange={(e) => updateChamp('coteFondFouille', parseFloat(e.target.value) || 0)}
-                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-emerald-800 font-bold"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-500 mb-1">Épaisseur voile (m)</label>
-              <input
-                type="number"
-                step="0.05"
-                min="0.2"
-                value={murActif.epaisseurVoile}
-                onChange={(e) => updateChamp('epaisseurVoile', parseFloat(e.target.value) || 0.3)}
-                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-500 mb-1">Patin avant (m)</label>
-              <input
-                type="number"
-                step="0.1"
-                min="0.0"
-                value={murActif.debordAvant}
-                onChange={(e) => updateChamp('debordAvant', parseFloat(e.target.value) || 0)}
-                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs">
-          <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">
-            2. Actions & Frottement d'Interface
-          </h3>
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div>
-              <label className="block text-slate-500 mb-1">Surcharge terre-plein q (kPa)</label>
-              <input
-                type="number"
-                step="2.0"
-                min="0"
-                value={murActif.surchargeQ}
-                onChange={(e) => updateChamp('surchargeQ', parseFloat(e.target.value) || 0)}
-                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg font-bold text-amber-900"
-              />
-            </div>
-            <div>
-              <label className="block text-slate-500 mb-1">Rapport frottement δ/φ'</label>
-              <input
-                type="number"
-                step="0.05"
-                min="0"
-                max="1.0"
-                value={murActif.frottementDeltaSurPhi}
-                onChange={(e) => updateChamp('frottementDeltaSurPhi', parseFloat(e.target.value) || 0.667)}
-                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg"
-              />
-            </div>
-          </div>
-          <div className="mt-4 p-2.5 bg-slate-50 rounded-lg text-xs text-slate-600 space-y-1">
-            <div className="font-semibold text-slate-800">Résultats des poussées sur l'écran :</div>
-            <div>• Coeff. de poussée Ka : <strong>{resMur.pressions.Ka}</strong></div>
-            <div>• Poussée terres active Pa,terres : {resMur.pressions.Pa_sol_k} kN/m</div>
-            <div>• Poussée due à surcharge Pa,q : {resMur.pressions.Pa_q_k} kN/m</div>
-            <div>• Poussée totale de calcul Pa,d : <strong>{resMur.pressions.Pa_d} kN/m</strong></div>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Les 4 vérifications obligatoires de la clause 9.4.1 */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-        <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-          <span className="font-bold text-slate-900 text-sm">
-            Les 4 Vérifications Obligatoires (Clause 9.4.1 de l'EN 1997-1)
-          </span>
-          <span className="text-xs text-slate-500 italic">Combinaisons ELU DA2*</span>
-        </div>
-
-        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* 1. Basculement EQU */}
-          <div
-            className={`p-4 rounded-xl border ${
-              resMur.basculementEQU.conforme ? 'bg-emerald-50/50 border-emerald-200' : 'bg-rose-50/60 border-rose-300'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-slate-800">1. Basculement (EQU)</span>
-              {resMur.basculementEQU.conforme ? (
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              ) : (
-                <ShieldAlert className="w-4 h-4 text-rose-600" />
-              )}
-            </div>
-            <div className="space-y-1.5 text-xs">
-              <div className="flex justify-between items-baseline">
-                <span className="text-slate-600">Taux EQU :</span>
-                <span className="font-extrabold text-base text-slate-900">
-                  {(resMur.basculementEQU.taux * 100).toFixed(1)} %
-                </span>
+            <Card>
+              <h3 className="text-xs font-semibold text-texte-faible uppercase tracking-wide mb-3">
+                1. Géométrie du Mur en L (Section 8.2)
+              </h3>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <Champ
+                  label="Hauteur totale H (m)"
+                  type="number"
+                  step="0.2"
+                  min="1.0"
+                  value={murActif.hauteurTotale}
+                  onChange={(e) => updateChamp('hauteurTotale', parseFloat(e.target.value) || 2)}
+                />
+                <Champ
+                  label="Largeur semelle B (m)"
+                  type="number"
+                  step="0.2"
+                  min="0.8"
+                  value={murActif.largeurSemelleB}
+                  onChange={(e) => updateChamp('largeurSemelleB', parseFloat(e.target.value) || 1)}
+                />
+                <Champ
+                  label="Cote Tête de mur (m)"
+                  type="number"
+                  step="0.1"
+                  value={murActif.coteTete}
+                  onChange={(e) => updateChamp('coteTete', parseFloat(e.target.value) || 0)}
+                />
+                <Champ
+                  label="Cote Fond fouille (m)"
+                  type="number"
+                  step="0.1"
+                  value={murActif.coteFondFouille}
+                  onChange={(e) => updateChamp('coteFondFouille', parseFloat(e.target.value) || 0)}
+                />
+                <Champ
+                  label="Épaisseur voile (m)"
+                  type="number"
+                  step="0.05"
+                  min="0.2"
+                  value={murActif.epaisseurVoile}
+                  onChange={(e) => updateChamp('epaisseurVoile', parseFloat(e.target.value) || 0.3)}
+                />
+                <Champ
+                  label="Patin avant (m)"
+                  type="number"
+                  step="0.1"
+                  min="0.0"
+                  value={murActif.debordAvant}
+                  onChange={(e) => updateChamp('debordAvant', parseFloat(e.target.value) || 0)}
+                />
               </div>
-              <div className="text-[11px] text-slate-500">
-                M_dst = {resMur.basculementEQU.M_dst_d} kNm/m
-                <br />
-                M_stb = {resMur.basculementEQU.M_stb_d} kNm/m
+            </Card>
+
+            <Card>
+              <h3 className="text-xs font-semibold text-texte-faible uppercase tracking-wide mb-3">
+                2. Actions & Frottement d'Interface
+              </h3>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <Champ
+                  label="Surcharge terre-plein q (kPa)"
+                  type="number"
+                  step="2.0"
+                  min="0"
+                  value={murActif.surchargeQ}
+                  onChange={(e) => updateChamp('surchargeQ', parseFloat(e.target.value) || 0)}
+                />
+                <Champ
+                  label="Rapport frottement δ/φ'"
+                  type="number"
+                  step="0.05"
+                  min="0"
+                  max="1.0"
+                  value={murActif.frottementDeltaSurPhi}
+                  onChange={(e) => updateChamp('frottementDeltaSurPhi', parseFloat(e.target.value) || 0.667)}
+                />
               </div>
-              <div className="pt-2 text-[10px] font-bold text-emerald-800">
-                {resMur.basculementEQU.conforme ? 'Sécurité satisfaite' : 'Risque de renversement'}
+              <div className="mt-4 p-2.5 bg-surface-appui rounded-rayon-petit text-xs text-texte-doux space-y-1">
+                <div className="font-semibold text-texte">Résultats des poussées sur l'écran :</div>
+                <div>• Coeff. de poussée Ka : <strong>{resMur.pressions.Ka}</strong></div>
+                <div>• Poussée terres active Pa,terres : {resMur.pressions.Pa_sol_k} kN/m</div>
+                <div>• Poussée due à surcharge Pa,q : {resMur.pressions.Pa_q_k} kN/m</div>
+                <div>• Poussée totale de calcul Pa,d : <strong>{resMur.pressions.Pa_d} kN/m</strong></div>
               </div>
-            </div>
+            </Card>
           </div>
 
-          {/* 2. Glissement sur la base */}
-          <div
-            className={`p-4 rounded-xl border ${
-              resMur.glissement.conforme ? 'bg-emerald-50/50 border-emerald-200' : 'bg-rose-50/60 border-rose-300'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-slate-800">2. Glissement base</span>
-              {resMur.glissement.conforme ? (
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              ) : (
-                <ShieldAlert className="w-4 h-4 text-rose-600" />
-              )}
+          {/* 2. Les 4 vérifications obligatoires de la clause 9.4.1 */}
+          <div className="bg-surface border border-bordure rounded-rayon overflow-hidden">
+            <div className="px-4 py-3 bg-surface-appui border-b border-bordure flex items-center justify-between">
+              <span className="font-semibold text-texte text-sm">
+                Les 4 Vérifications Obligatoires (Clause 9.4.1 de l'EN 1997-1)
+              </span>
+              <span className="text-xs text-texte-doux italic">Combinaisons ELU DA2*</span>
             </div>
-            <div className="space-y-1.5 text-xs">
-              <div className="flex justify-between items-baseline">
-                <span className="text-slate-600">Taux glissement :</span>
-                <span className="font-extrabold text-base text-slate-900">
-                  {(resMur.glissement.taux * 100).toFixed(1)} %
-                </span>
-              </div>
-              <div className="text-[11px] text-slate-500">
-                H_d = {resMur.glissement.H_d} kN/m
-                <br />
-                R_hd = {resMur.glissement.R_hd} kN/m
-              </div>
-              <div className="pt-2 text-[10px] font-bold text-emerald-800">
-                {resMur.glissement.conforme ? 'Pas de glissement' : 'Glissement excessif'}
-              </div>
-            </div>
-          </div>
 
-          {/* 3. Portance de la semelle */}
-          <div
-            className={`p-4 rounded-xl border ${
-              resMur.portance.conforme ? 'bg-emerald-50/50 border-emerald-200' : 'bg-rose-50/60 border-rose-300'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-slate-800">3. Portance semelle</span>
-              {resMur.portance.conforme ? (
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              ) : (
-                <ShieldAlert className="w-4 h-4 text-rose-600" />
-              )}
-            </div>
-            <div className="space-y-1.5 text-xs">
-              <div className="flex justify-between items-baseline">
-                <span className="text-slate-600">Taux portance :</span>
-                <span className="font-extrabold text-base text-slate-900">
-                  {(resMur.portance.taux * 100).toFixed(1)} %
-                </span>
-              </div>
-              <div className="text-[11px] text-slate-500">
-                V_d = {resMur.portance.V_d} kN/m
-                <br />
-                R_vd = {resMur.portance.R_vd} kN/m
-              </div>
-              <div className="pt-2 text-[10px] font-bold text-emerald-800">
-                Largeur eff. B' = {resMur.portance.B_prime} m
-              </div>
-            </div>
-          </div>
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* 1. Basculement EQU */}
+              <Verdict etat={resMur.basculementEQU.conforme ? 'ok' : 'refus'}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs">1. Basculement (EQU)</span>
+                  {resMur.basculementEQU.conforme ? (
+                    <ShieldCheck className="w-4 h-4" />
+                  ) : (
+                    <ShieldAlert className="w-4 h-4" />
+                  )}
+                </div>
+                <div className="space-y-1.5 text-xs font-normal">
+                  <div className="flex justify-between items-baseline">
+                    <span>Taux EQU :</span>
+                    <span className="font-mono tabular-nums text-base font-semibold">
+                      {(resMur.basculementEQU.taux * 100).toFixed(1)} %
+                    </span>
+                  </div>
+                  <div className="text-[11px]">
+                    M_dst = {resMur.basculementEQU.M_dst_d} kNm/m
+                    <br />
+                    M_stb = {resMur.basculementEQU.M_stb_d} kNm/m
+                  </div>
+                  <div className="pt-2 text-[10px] font-semibold">
+                    {resMur.basculementEQU.conforme ? 'Sécurité satisfaite' : 'Risque de renversement'}
+                  </div>
+                </div>
+              </Verdict>
 
-          {/* 4. Stabilité générale */}
-          <div
-            className={`p-4 rounded-xl border ${
-              resMur.stabiliteGlobale.conforme ? 'bg-emerald-50/50 border-emerald-200' : 'bg-rose-50/60 border-rose-300'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-slate-800">4. Stabilité globale</span>
-              {resMur.stabiliteGlobale.conforme ? (
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              ) : (
-                <ShieldAlert className="w-4 h-4 text-rose-600" />
-              )}
-            </div>
-            <div className="space-y-1.5 text-xs">
-              <div className="flex justify-between items-baseline">
-                <span className="text-slate-600">Facteur sécurité :</span>
-                <span className="font-extrabold text-base text-slate-900">
-                  {resMur.stabiliteGlobale.facteurSecurite}
-                </span>
-              </div>
-              <div className="text-[11px] text-slate-500">
-                Méthode : {resMur.stabiliteGlobale.methode}
-                <br />
-                Critère : F ≥ 1.00 (ELU)
-              </div>
-              <div className="pt-2 text-[10px] font-bold text-emerald-800">
-                {resMur.stabiliteGlobale.conforme ? 'Grand glissement évité' : 'Risque grand glissement'}
-              </div>
+              {/* 2. Glissement sur la base */}
+              <Verdict etat={resMur.glissement.conforme ? 'ok' : 'refus'}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs">2. Glissement base</span>
+                  {resMur.glissement.conforme ? (
+                    <ShieldCheck className="w-4 h-4" />
+                  ) : (
+                    <ShieldAlert className="w-4 h-4" />
+                  )}
+                </div>
+                <div className="space-y-1.5 text-xs font-normal">
+                  <div className="flex justify-between items-baseline">
+                    <span>Taux glissement :</span>
+                    <span className="font-mono tabular-nums text-base font-semibold">
+                      {(resMur.glissement.taux * 100).toFixed(1)} %
+                    </span>
+                  </div>
+                  <div className="text-[11px]">
+                    H_d = {resMur.glissement.H_d} kN/m
+                    <br />
+                    R_hd = {resMur.glissement.R_hd} kN/m
+                  </div>
+                  <div className="pt-2 text-[10px] font-semibold">
+                    {resMur.glissement.conforme ? 'Pas de glissement' : 'Glissement excessif'}
+                  </div>
+                </div>
+              </Verdict>
+
+              {/* 3. Portance de la semelle */}
+              <Verdict etat={resMur.portance.conforme ? 'ok' : 'refus'}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs">3. Portance semelle</span>
+                  {resMur.portance.conforme ? (
+                    <ShieldCheck className="w-4 h-4" />
+                  ) : (
+                    <ShieldAlert className="w-4 h-4" />
+                  )}
+                </div>
+                <div className="space-y-1.5 text-xs font-normal">
+                  <div className="flex justify-between items-baseline">
+                    <span>Taux portance :</span>
+                    <span className="font-mono tabular-nums text-base font-semibold">
+                      {(resMur.portance.taux * 100).toFixed(1)} %
+                    </span>
+                  </div>
+                  <div className="text-[11px]">
+                    V_d = {resMur.portance.V_d} kN/m
+                    <br />
+                    R_vd = {resMur.portance.R_vd} kN/m
+                  </div>
+                  <div className="pt-2 text-[10px] font-semibold">
+                    Largeur eff. B' = {resMur.portance.B_prime} m
+                  </div>
+                </div>
+              </Verdict>
+
+              {/* 4. Stabilité générale */}
+              <Verdict etat={resMur.stabiliteGlobale.conforme ? 'ok' : 'refus'}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs">4. Stabilité globale</span>
+                  {resMur.stabiliteGlobale.conforme ? (
+                    <ShieldCheck className="w-4 h-4" />
+                  ) : (
+                    <ShieldAlert className="w-4 h-4" />
+                  )}
+                </div>
+                <div className="space-y-1.5 text-xs font-normal">
+                  <div className="flex justify-between items-baseline">
+                    <span>Facteur sécurité :</span>
+                    <span className="font-mono tabular-nums text-base font-semibold">
+                      {resMur.stabiliteGlobale.facteurSecurite}
+                    </span>
+                  </div>
+                  <div className="text-[11px]">
+                    Méthode : {resMur.stabiliteGlobale.methode}
+                    <br />
+                    Critère : F ≥ 1.00 (ELU)
+                  </div>
+                  <div className="pt-2 text-[10px] font-semibold">
+                    {resMur.stabiliteGlobale.conforme ? 'Grand glissement évité' : 'Risque grand glissement'}
+                  </div>
+                </div>
+              </Verdict>
             </div>
           </div>
-        </div>
-      </div>
-    </>
-  )}
-</div>
+        </>
+      )}
+    </div>
   );
 };
