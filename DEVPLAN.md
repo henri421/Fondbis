@@ -2285,6 +2285,51 @@ pour les concepts propres à Fondation après audit).
 hex codés en dur dans les fonctions de dessin SVG) — chacun sur son propre commit/revue,
 jamais mélangés à du code de calcul.
 
+**Déroulé sur le reste (2026-09-22/23, Claude) : terminé, les 16 fichiers sont migrés.**
+
+Ordre suivi : `OfflineIndicator`/`PWAInstallButton`/`ErrorBoundary` (petits, châssis) →
+`OngletStabilite`/`OngletContraintes` → `ModalNoteDeCalcul` → `OngletSoutenement` (Mur en L)
+→ `GraphiqueCourbeTassement` (chrome seulement, palette catégorielle validée conservée) →
+`VuePieuTransversal` → `OngletRadier` → `OngletPieux` → `OngletSol` → `CoupeDeSolCanvas` →
+`OngletParoiPhasee` (dernier, le plus gros) → balayage final `App.tsx` (toast + pied de page
+oubliés dans la première passe). Un commit dédié par fichier, `tsc`/`test:acceptance`/`build`
+vérifiés après chacun, jamais mélangé à du code de calcul.
+
+**Décisions transversales prises en cours de route, non anticipées dans `DESIGN.md` :**
+- **ELS/ELU** traités comme une distinction neutre partout (pas de bleu/rose par état) : les
+  deux chaînes ont la même importance, coder l'une en couleur et l'autre non revenait à
+  suggérer que l'une est secondaire.
+- **Catégories/badges informatifs** (loi p-y appliquée, régime de consolidation, type
+  buton/tirant, statut de traçabilité) neutralisés — ce ne sont pas des verdicts, un code
+  couleur par catégorie n'ajoutait aucune information.
+- **Graphiques à séries superposées** (courbe de tassement, Pa/Pp) : palette catégorielle
+  validée avec le skill dataviz et conservée — légitimement distincte du châssis. **Graphiques
+  à colonnes séparées non superposées** (déformée/moment/tranchant dans `OngletParoiPhasee`) :
+  neutralisés, aucune séparation catégorielle n'était nécessaire puisque rien n'est superposé.
+- **Poussée Pa / Butée Pp** → `--traction`/`--compression` (même axe sémantique que la suite :
+  « déstabilisant / résistant »). **Frottement négatif** (pieux) → `--alerte` (action
+  permanente défavorable réelle). **Terrain Naturel / cotes de repère** → `--neutre`.
+
+**Incidents trouvés et corrigés en migrant (pas des régressions introduites par la refonte,
+des bugs préexistants révélés en touchant le code) :**
+- `OngletSoutenement.tsx` : le libellé de conclusion des 4 vérifications du mur en L
+  (« Glissement excessif », etc.) était toujours affiché en vert, sa couleur étant codée en
+  dur indépendamment de l'état réel `conforme`. Corrigé en passant par le composant `Verdict`
+  partagé, dont la couleur suit l'état — vérifié en navigateur après coup (capture d'écran).
+- `OngletRadier.tsx` : la carte de vérification UPL (soulèvement) utilisait du bleu « sky »
+  au lieu du vert/rouge des deux autres cartes ELU quand conforme — un 4ᵉ état de fait qui
+  n'existe pas dans le système à 3 états de la suite. Alignée sur `ok`/`refus`.
+- Un bug de substitution automatique (regex sans limite de mot dans le script Python utilisé
+  pour `OngletParoiPhasee.tsx`) avait tronqué `bg-rose-500` en `bg-refus-fond0` etc. dans la
+  config des étiquettes — détecté par une recherche exhaustive de jetons suivis d'un chiffre
+  parasite avant de committer, corrigé, confirmé absent du reste du fichier.
+
+**Vérifié à la fin** : `tsc --noEmit`, `npm run test:acceptance` (37/37, inchangé — aucun
+fichier de calcul touché de toute la refonte), `npm run build`, et un passage complet en
+navigateur sur tous les onglets (Radier, Pieux + comportement transversal, Soutènement dans
+ses 3 sous-modes + Mur en L, Stabilité, Sol, Contraintes, Recette Normative, Note de Calcul
+imprimable) sans aucune erreur console.
+
 ## Prochaines étapes (selon plan)
 
 1. **Surcouche Berlinoise (§8.5)** — **close** : implémentée, testée (35/35), revue, vérifiée
