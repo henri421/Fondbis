@@ -117,7 +117,8 @@ export function calculerTassementSousCoucheOedométrique(
 }
 
 /**
- * Calcul complet du tassement ELS selon EN 1997-1:2004 Annexe F
+ * Tassement ELS de consolidation (CDC §6.5, oedométrique par sous-couche).
+ * Le tassement immédiat (annexe F) n'est pas inclus.
  */
 export function calculerTassementRadierELS(
   ouvrage: OuvrageRadier,
@@ -131,7 +132,7 @@ export function calculerTassementRadierELS(
 ): ResultatTassementELS {
   const { actions, coteBase, largeurB, longueurL } = ouvrage;
   const surface = largeurB * longueurL;
-  // Charge ELS quasi-permanente : V_G + 0.3 * V_Q (ou V_G + V_Q caractéristique)
+  // Charge ELS caractéristique : V_G + V_Q (pression brute, sans déduction du sol excavé)
   const V_ELS = actions.V_G + actions.V_Q;
   const q_ELS = Math.max(1, V_ELS / surface);
 
@@ -241,7 +242,8 @@ export function calculerCourbeTassementCharge(
 ): PointCourbeTassementCharge[] {
   const { actions, coteBase, largeurB, longueurL } = ouvrage;
   const surface = largeurB * longueurL;
-  const V_ELS = Math.max(10, actions.V_G + actions.V_Q);
+  // Même charge de service que calculerTassementRadierELS, pour que le repère ELS tombe sur la courbe
+  const V_ELS = actions.V_G + actions.V_Q;
   const q_ELS = Math.max(1, V_ELS / surface);
 
   const nbPoints = options?.nbPoints || 21;

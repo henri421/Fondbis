@@ -2350,7 +2350,7 @@ imprimable) sans aucune erreur console.
 
 ## Wiring restant (hors code de calcul)
 
-- [x] README.md, LICENSE — rédigés (README complet avec commandes/architecture, LICENSE MIT).
+- [x] README.md, LICENSE — rédigés (README : périmètre, commandes, documentation ; LICENSE MIT).
 - [ ] Décision de visibilité : rester privé tant que la phase 4 n'est pas validée (outil à
   responsabilité réglementaire, cf. §13 du CDC). Repasser en public + GitHub Pages, à
   l'anonyme `henri421` comme le reste de la suite, une fois mûr.
@@ -2367,3 +2367,24 @@ Corrigé : `base: './'` ajouté à `vite.config.ts`, manifest (`id`, `start_url`
 sur le build (`dist/index.html`, `dist/manifest.webmanifest`, `dist/sw.js`) : tous les
 chemins sont désormais relatifs (`./assets/…`, `pwa-192x192.png` sans slash initial, etc.).
 28/28 tests, lint et build inchangés (aucun impact sur le code de calcul).
+
+## Audit des derniers push AI Studio (2026-09-24, Claude)
+
+- **`e7c1756` avait cassé `npm ci`** : 2ᵉ « remove unused recharts » (après `e19d2c2`), alors
+  que recharts est utilisé par `GraphiqueCourbeTassement.tsx`. Le lock régénéré n'avait plus
+  aucun champ `resolved`. Lock de `42f114a` restauré, `npm ci` vérifié sur un worktree propre.
+  **Garde pour Gemini : ne pas toucher `package.json`/`package-lock.json` sans demande.**
+- Restes du scaffold retirés : `MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API` (`metadata.json`),
+  `.env.example` (`GEMINI_API_KEY`, `APP_URL`) — rien ne les utilisait.
+- Workflow Pages : le job `deploy` ne tourne plus qu'en `workflow_dispatch` (dépôt privé,
+  Pages non activé). Un push sur `main` exécute seulement lint + tests + build.
+- `tassementELS.ts` (courbe charge-tassement de `4f0fe3d`, jamais revue) : formules conformes
+  au CDC §6.5, point ELS de la courbe identique au calcul principal sur le projet exemple
+  (q = 104,2 kPa, 39,2 / 14,2 mm). Plancher `Math.max(10, …)` retiré de la courbe (divergeait
+  du calcul principal), commentaires « quasi-permanente » et « Annexe F » corrigés.
+- **Question ouverte (à trancher par Henri, le CDC §6.5 est muet)** : le tassement utilise la
+  pression **brute** V/A, sans déduire le poids du sol excavé. Sur le projet exemple (base à
+  3,3 m), c'est nettement conservatif : distorsion 1/432, donc « non conforme » face à 1/500.
+  Pression nette `q − σ'v0(base)` ou brute : à fixer dans la spec avant toute modification.
+- Mineur, laissé en l'état : seuil « Admissible 50 mm » par défaut du graphique (prop non
+  alimentée par l'onglet), à rendre saisissable si besoin.
