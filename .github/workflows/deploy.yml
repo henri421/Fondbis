@@ -1,0 +1,68 @@
+name: Deploiement GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un seul deploiement concurrent ; les executions en cours ne sont pas annulees.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recuperation du depot
+        uses: actions/checkout@v4
+
+      - name: Installation de Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installation des dependances
+        run: npm ci
+
+      - name: Verification TypeScript
+        run: npm run lint
+
+      - name: Tests d'acceptation
+        run: npm run test:acceptance
+
+      - name: Construction du bundle de production
+        # vite.config.ts utilise base './' au build : les chemins sont relatifs,
+        # le site fonctionne donc sous https://<compte>.github.io/<depot>/ sans
+        # variable supplementaire.
+        run: npm run build
+
+      - name: Fallback SPA pour les URL inconnues
+        run: cp dist/index.html dist/404.html
+
+      - name: Publication de l'artefact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  # Publication manuelle uniquement (workflow_dispatch) : le depot reste prive tant que
+  # la validation n'est pas faite (DEVPLAN, « Wiring restant »). Un push sur main ne
+  # fait que la verification (lint, tests, build).
+  deploy:
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploiement sur GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
