@@ -352,7 +352,7 @@ export default function App() {
           )}
 
           {ongletActif === 'stabilite' && (
-            <OngletStabilite modele={modele} />
+            <OngletStabilite modele={modele} onUpdateModele={handleUpdateModele} />
           )}
 
           {ongletActif === 'validation' && (

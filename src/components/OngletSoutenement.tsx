@@ -266,33 +266,11 @@ export const OngletSoutenement: React.FC<OngletSoutenementProps> = ({ modele, on
                 </div>
               </Verdict>
 
-              {/* 4. Stabilité générale */}
-              <Verdict etat={resMur.stabiliteGlobale.conforme ? 'ok' : 'refus'}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs">4. Stabilité globale</span>
-                  {resMur.stabiliteGlobale.conforme ? (
-                    <ShieldCheck className="w-4 h-4" />
-                  ) : (
-                    <ShieldAlert className="w-4 h-4" />
-                  )}
-                </div>
-                <div className="space-y-1.5 text-xs font-normal">
-                  <div className="flex justify-between items-baseline">
-                    <span>Facteur sécurité :</span>
-                    <span className="font-mono tabular-nums text-base font-semibold">
-                      {resMur.stabiliteGlobale.facteurSecurite}
-                    </span>
-                  </div>
-                  <div className="text-[11px]">
-                    Méthode : {resMur.stabiliteGlobale.methode}
-                    <br />
-                    Critère : F ≥ 1.00 (ELU)
-                  </div>
-                  <div className="pt-2 text-[10px] font-semibold">
-                    {resMur.stabiliteGlobale.conforme ? 'Grand glissement évité' : 'Risque grand glissement'}
-                  </div>
-                </div>
-              </Verdict>
+              {/* 4. Stabilité générale : non calculée dans ce module (état « attente », pas un verdict) */}
+              <div className="rounded-rayon bg-surface-appui p-3 text-xs text-texte-doux">
+                <div className="font-semibold mb-2">4. Stabilité générale</div>
+                <p className="text-[11px]">{resMur.stabiliteGlobale.methode}.</p>
+              </div>
             </div>
           </div>
         </>

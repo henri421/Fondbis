@@ -99,6 +99,14 @@ export interface CampagneEssai {
 
 export type ApprocheCalcul = 'DA1' | 'DA2' | 'DA3';
 
+export interface JeuFacteursResistance {
+  gamma_Rv: number;
+  gamma_Rh: number;
+  gamma_Rb: number;
+  gamma_Rs: number;
+  gamma_Re?: number; // talus et stabilité générale (tableau A.14) ; absent des anciens projets
+}
+
 export interface ConfigurationNormative {
   identifiant: string;
   libelle: string;
@@ -113,10 +121,10 @@ export interface ConfigurationNormative {
     M2: { gamma_phi: number; gamma_c: number; gamma_cu: number; gamma_qu: number; gamma_gamma: number };
   };
   facteursResistance: {
-    R1: { gamma_Rv: number; gamma_Rh: number; gamma_Rb: number; gamma_Rs: number };
-    R2: { gamma_Rv: number; gamma_Rh: number; gamma_Rb: number; gamma_Rs: number };
-    R3: { gamma_Rv: number; gamma_Rh: number; gamma_Rb: number; gamma_Rs: number };
-    R4: { gamma_Rv: number; gamma_Rh: number; gamma_Rb: number; gamma_Rs: number };
+    R1: JeuFacteursResistance;
+    R2: JeuFacteursResistance;
+    R3: JeuFacteursResistance;
+    R4: JeuFacteursResistance;
   };
   coefficientsCorrelationPieux: {
     tableXi: Array<{ n: number; xi3: number; xi4: number }>;
@@ -260,6 +268,16 @@ export interface OuvrageSoutenement {
   khParCouche?: Record<string, number>; // kN/m³, clé = CoucheGeotechnique.id
 }
 
+/** Surcharge verticale uniforme en bande sur le profil du talus (kPa, par m de profil). */
+export interface SurchargeTalus {
+  id: string;
+  nom: string;
+  xDebut: number; // m
+  xFin: number; // m
+  q: number; // kPa
+  nature: 'G' | 'Q'; // permanente ou variable
+}
+
 export interface ModeleTerrain {
   schemaVersion: '1.0';
   projet: {
@@ -271,6 +289,7 @@ export interface ModeleTerrain {
   };
   referentiel: Referentiel;
   profilTerrainNaturel?: Array<{ x: number; y: number }> | null; // Polyligne de profil réel du talus
+  surchargesTalus?: SurchargeTalus[]; // Surcharges sur le talus (onglet Stabilité)
   hydrogeologie: Hydrogeologie;
   couches: CoucheGeotechnique[];
   campagnes: CampagneEssai[];

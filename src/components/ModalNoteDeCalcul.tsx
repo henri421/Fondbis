@@ -225,7 +225,7 @@ export const ModalNoteDeCalcul: React.FC<ModalNoteDeCalculProps> = ({ modele, on
                   <div>1. Basculement (EQU) : <strong>{(resMur.basculementEQU.taux * 100).toFixed(1)} %</strong></div>
                   <div>2. Glissement : <strong>{(resMur.glissement.taux * 100).toFixed(1)} %</strong></div>
                   <div>3. Portance : <strong>{(resMur.portance.taux * 100).toFixed(1)} %</strong></div>
-                  <div>4. Stabilité globale : <strong>F = {resMur.stabiliteGlobale.facteurSecurite}</strong></div>
+                  <div>4. Stabilité générale : <strong>non calculée ici (onglet Stabilité)</strong></div>
                 </div>
               </div>
             )}

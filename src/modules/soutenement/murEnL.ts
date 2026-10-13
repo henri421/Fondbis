@@ -246,10 +246,11 @@ export function verifierMurEnLELU(
       R_vd: Number((res.portance.q_ult_Rd * res.portance.B_prime).toFixed(1)),
       B_prime: res.portance.B_prime,
     },
+    // Non calculée ici (l'ancienne valeur F = 1,48 était fictive) : la stabilité générale
+    // se vérifie dans l'onglet Stabilité, avec le profil réel et les surcharges.
     stabiliteGlobale: {
-      conforme: true,
-      facteurSecurite: 1.48,
-      methode: 'Bishop simplifié (Cercle critique)',
+      calculee: false as const,
+      methode: "Non calculée dans ce module : voir l'onglet Stabilité (Bishop, cercles critiques)",
     },
   };
 }

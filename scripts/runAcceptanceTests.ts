@@ -3,6 +3,7 @@ import { executerTestsAcceptationSolveur } from '../src/validation/acceptanceTes
 import { executerTestsAcceptationSoutenement } from '../src/validation/acceptanceTestsSoutenement';
 import { executerTestsAcceptationPieuxTransversal } from '../src/validation/acceptanceTestsPieuxTransversal';
 import { executerTestsAcceptationSensibilitePlaqueStabilite } from '../src/validation/acceptanceTestsSensibilitePlaqueStabilite';
+import { executerTestsStabiliteTalus } from '../src/validation/acceptanceTestsStabiliteTalus';
 
 console.log('================================================================');
 console.log('  SUITE DE TESTS D\'ACCEPTATION NORMATIFS — GEOTECH EC7 (EN 1997-1)');
@@ -13,12 +14,14 @@ const testsSolveur = executerTestsAcceptationSolveur();
 const testsSoutenement = executerTestsAcceptationSoutenement();
 const testsPieuxTransversal = executerTestsAcceptationPieuxTransversal();
 const testsSensibilitePlaqueStabilite = executerTestsAcceptationSensibilitePlaqueStabilite();
+const testsStabiliteTalus = executerTestsStabiliteTalus();
 const tousLesTests = [
   ...testsEC7,
   ...testsSolveur,
   ...testsSoutenement,
   ...testsPieuxTransversal,
   ...testsSensibilitePlaqueStabilite,
+  ...testsStabiliteTalus,
 ];
 
 let totalSucces = 0;

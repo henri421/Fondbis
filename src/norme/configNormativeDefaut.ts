@@ -36,9 +36,10 @@ export const CONFIG_NORMATIVE_DEFAUT: ConfigurationNormative = {
     },
   },
   facteursResistance: {
-    R1: { gamma_Rv: 1.00, gamma_Rh: 1.00, gamma_Rb: 1.00, gamma_Rs: 1.00 },
-    R2: { gamma_Rv: 1.40, gamma_Rh: 1.10, gamma_Rb: 1.10, gamma_Rs: 1.10 },
-    R3: { gamma_Rv: 1.00, gamma_Rh: 1.00, gamma_Rb: 1.00, gamma_Rs: 1.00 },
+    // gamma_Re : talus et stabilité générale, tableau A.14
+    R1: { gamma_Rv: 1.00, gamma_Rh: 1.00, gamma_Rb: 1.00, gamma_Rs: 1.00, gamma_Re: 1.00 },
+    R2: { gamma_Rv: 1.40, gamma_Rh: 1.10, gamma_Rb: 1.10, gamma_Rs: 1.10, gamma_Re: 1.10 },
+    R3: { gamma_Rv: 1.00, gamma_Rh: 1.00, gamma_Rb: 1.00, gamma_Rs: 1.00, gamma_Re: 1.00 },
     R4: { gamma_Rv: 1.40, gamma_Rh: 1.10, gamma_Rb: 1.45, gamma_Rs: 1.30 },
   },
   coefficientsCorrelationPieux: {
