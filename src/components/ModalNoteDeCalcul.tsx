@@ -4,6 +4,9 @@ import { verifierPortanceRadierELU } from '../modules/radier/portanceELU';
 import { calculerTassementRadierELS } from '../modules/radier/tassementELS';
 import { verifierPieuAxial } from '../modules/pieux/capaciteAxiale';
 import { verifierMurEnLELU } from '../modules/soutenement/murEnL';
+import { combinaisonsELU } from '../modules/solRenforce/parametres';
+import { verifierStabiliteInterne } from '../modules/solRenforce/stabiliteInterne';
+import { verifierStabiliteExterne } from '../modules/solRenforce/stabiliteExterne';
 import { X, Printer, FileText } from 'lucide-react';
 import { Bouton } from './ui/Bouton';
 
@@ -46,6 +49,27 @@ export const ModalNoteDeCalcul: React.FC<ModalNoteDeCalculProps> = ({ modele, on
   const resMur = mur
     ? verifierMurEnLELU(mur, modele.couches, modele.hydrogeologie, modele.configurationNormative)
     : null;
+
+  const massif = modele.ouvrages.solsRenforces?.[0];
+  const resMassif = massif
+    ? combinaisonsELU(modele.configurationNormative).map((c) => ({
+        combinaison: c,
+        interne: verifierStabiliteInterne(massif, c),
+        externe: verifierStabiliteExterne(massif, c, modele.couches, modele.hydrogeologie, modele.configurationNormative),
+      }))
+    : null;
+
+  // Verdict calculé (et non plus affiché « CONFORME » d'office)
+  const badge = (tauxMax: number, perimetre: string) =>
+    tauxMax <= 1 ? (
+      <span className="font-semibold text-ok bg-ok-fond px-2 py-0.5 rounded-rayon-petit">
+        CONFORME ({perimetre}, taux max {(tauxMax * 100).toFixed(0)} %)
+      </span>
+    ) : (
+      <span className="font-semibold text-refus bg-refus-fond px-2 py-0.5 rounded-rayon-petit">
+        NON CONFORME ({perimetre}, taux max {Number.isFinite(tauxMax) ? (tauxMax * 100).toFixed(0) : '∞'} %)
+      </span>
+    );
 
   return (
     <div className="fixed inset-0 z-50 bg-texte/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-surface">
@@ -157,9 +181,7 @@ export const ModalNoteDeCalcul: React.FC<ModalNoteDeCalculProps> = ({ modele, on
                   <span className="font-semibold text-texte">
                     Ouvrage 1 : {radier.nom} (B = {radier.largeurB}m, L = {radier.longueurL}m, base = {radier.coteBase}m)
                   </span>
-                  <span className="font-semibold text-ok bg-ok-fond px-2 py-0.5 rounded-rayon-petit">
-                    CONFORME EC7
-                  </span>
+                  {badge(Math.max(resRadierELU.tauxExploitationGouvernant, resRadierELU.tauxGlissementDraine, resRadierELU.upl.taux), 'ELU')}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
                   <div>
@@ -189,9 +211,7 @@ export const ModalNoteDeCalcul: React.FC<ModalNoteDeCalculProps> = ({ modele, on
                   <span className="font-semibold text-texte">
                     Ouvrage 2 : {pieu.nom} (Ø {pieu.diametre}m, Tête {pieu.coteTete}m, Pointe {pieu.cotePointe}m)
                   </span>
-                  <span className="font-semibold text-ok bg-ok-fond px-2 py-0.5 rounded-rayon-petit">
-                    CONFORME EC7
-                  </span>
+                  {badge(resPieu.tauxExploitation, 'capacité axiale ELU')}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
                   <div>
@@ -217,15 +237,42 @@ export const ModalNoteDeCalcul: React.FC<ModalNoteDeCalculProps> = ({ modele, on
                   <span className="font-semibold text-texte">
                     Ouvrage 3 : {mur.nom} (H = {mur.hauteurTotale}m, B = {mur.largeurSemelleB}m)
                   </span>
-                  <span className="font-semibold text-ok bg-ok-fond px-2 py-0.5 rounded-rayon-petit">
-                    CONFORME EC7
-                  </span>
+                  {badge(Math.max(resMur.basculementEQU.taux, resMur.glissement.taux, resMur.portance.taux), 'EQU, glissement, portance')}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
                   <div>1. Basculement (EQU) : <strong>{(resMur.basculementEQU.taux * 100).toFixed(1)} %</strong></div>
                   <div>2. Glissement : <strong>{(resMur.glissement.taux * 100).toFixed(1)} %</strong></div>
                   <div>3. Portance : <strong>{(resMur.portance.taux * 100).toFixed(1)} %</strong></div>
                   <div>4. Stabilité générale : <strong>non calculée ici (onglet Stabilité)</strong></div>
+                </div>
+              </div>
+            )}
+
+            {/* Sol renforcé */}
+            {massif && resMassif && (
+              <div className="p-3 bg-surface-appui rounded-rayon border border-bordure space-y-2">
+                <div className="flex justify-between items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-texte">
+                    Ouvrage 4 : {massif.nom} (H = {massif.hauteur} m, L = {massif.longueurArmatures} m, base = {massif.coteBase.toFixed(2)} m)
+                  </span>
+                  {badge(
+                    Math.max(...resMassif.map((r) => Math.max(r.interne.tauxMax, r.externe.tauxMax))),
+                    'externe et interne'
+                  )}
+                </div>
+                {resMassif.map(({ combinaison, interne, externe }) => (
+                  <div key={combinaison.id} className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[11px]">
+                    <div className="sm:col-span-5 font-semibold">{combinaison.libelle}</div>
+                    <div>Glissement : <strong>{(externe.glissement.taux * 100).toFixed(1)} %</strong></div>
+                    <div>Excentricité e/(L/6) : <strong>{(externe.excentricite.taux * 100).toFixed(1)} %</strong></div>
+                    <div>Portance : <strong>{(externe.portance.taux * 100).toFixed(1)} %</strong></div>
+                    <div>Interne (lit le plus sollicité) : <strong>{Number.isFinite(interne.tauxMax) ? (interne.tauxMax * 100).toFixed(1) : '∞'} %</strong></div>
+                    <div>Stabilité générale : <strong>onglet Sol renforcé</strong></div>
+                  </div>
+                ))}
+                <div className="text-[10px] text-texte-faible">
+                  Méthode cohérente gravitaire simplifiée (FHWA-NHI-10-024 / AASHTO) dans le cadre EN 1997-1 ; coefficients de méthode
+                  et facteurs γR des armatures à confirmer selon le référentiel du projet.
                 </div>
               </div>
             )}

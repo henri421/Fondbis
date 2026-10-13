@@ -1,5 +1,8 @@
 # Plan — talus chargé et sol renforcé (terre armée)
 
+> **État au 13/10/2026 : étapes 1 et 2 réalisées** (59 tests d'acceptation au vert).
+> Voir « Bilan » en fin de document pour les écarts au plan et les points ouverts.
+
 Demande du 13/10/2026 : étape 1 (talus chargé) puis étape 2 (terre armée), tout dans le
 navigateur (TypeScript). Le passage à Python est reporté à une discussion ultérieure.
 
@@ -151,3 +154,34 @@ dans le massif renforcé, surfaces non circulaires, éléments finis (évoqué, 
 Commits par lot sur `main`, tests d'acceptation au vert à chaque lot (banc local :
 `_banc-local/hooks-tsx.mjs`), push en fin d'étape (la CI ne fait que vérifier, la publication
 Pages reste manuelle).
+
+## Bilan (13/10/2026)
+
+Réalisé selon le plan, avec ces écarts et constats :
+
+- **Sens du glissement** : avec `sens = +1` la masse tourne en sens horaire et part vers les
+  x décroissants. Un premier branchement des renforcements l'avait inversé (et le test
+  T_MSE.6 avait été écrit sur la même erreur) ; corrigé, T_MSE.6b vérifie qu'un lit comprimé
+  ne reprend rien.
+- **Cercles tronqués** : un cercle dont le centre est sous le terrain à l'aplomb d'une
+  extrémité est maintenant rejeté (la masse était fermée par une verticale fictive).
+- **Renforcements dans Bishop** : ils réduisent le moment moteur (F porte sur la seule
+  résistance du sol) au lieu de s'ajouter au moment résistant, pour ne pas diviser une
+  seconde fois leur résistance de calcul par γR;e.
+- **Stabilité générale du massif** : seuls les cercles passant sous le pied du parement sont
+  retenus (ceux qui recoupent le parement relèvent de la stabilité interne).
+- **Eau** : le module de portance ignore l'eau libre ; pour le massif, la nappe est plafonnée
+  au terrain devant le parement et la limite est signalée (T_MSE.8).
+- **Note de calcul** : les badges « CONFORME EC7 » étaient écrits en dur pour le radier, le
+  pieu et le mur en L ; ils sont désormais calculés (sur le projet d'exemple, pieu 140 % et
+  mur en L 149 % : non conformes). Section « Ouvrage 4 : sol renforcé » ajoutée.
+- Banc local : `_banc-local/hooks-tsx.mjs` (tests), `serveur-react.mjs` (aperçu React sans
+  npm), typecheck avec stubs React et `strict` aligné sur TS 5.
+
+Points ouverts :
+
+- Q1 et Q2 ci-dessus (NF P 94-270, approche de calcul visée).
+- Le projet d'exemple est non conforme en sol renforcé (portance non drainée de l'argile,
+  arrachement des lits hauts avec γR;a = 1,35 indicatif) : c'est le résultat du calcul, pas
+  un défaut, mais l'exemple pourrait être réglé pour être démonstratif.
+- Éléments finis (réduction c-φ) et passage à Python : reportés, à rediscuter.

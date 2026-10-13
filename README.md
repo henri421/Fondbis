@@ -12,9 +12,14 @@ familles de vérifications :
   pressiométrique), effet de groupe.
 - **Ouvrages de soutènement** — mur en L (équilibre limite), paroi flexible phasée
   (coefficient de réaction, chaînage d'état entre phases d'excavation).
+- **Sol renforcé (terre armée)** — feuillards, grilles ou géosynthétiques : stabilité
+  interne (arrachement, rupture avec corrosion), externe (glissement, excentricité,
+  portance) et générale ou mixte (Bishop avec armatures). Méthode cohérente gravitaire
+  simplifiée (FHWA / AASHTO), coefficients modifiables avec leur source.
 
-Deux briques transversales complètent l'ensemble : stabilité générale (Bishop simplifiée,
-recherche automatique du cercle critique) et hydraulique de fouille (renard). Une analyse de
+Deux briques transversales complètent l'ensemble : stabilité générale (Bishop simplifiée
+sur profil de talus réel, surcharges en bande G/Q, combinaisons DA1/DA2/DA3, recherche du
+cercle critique par combinaison) et hydraulique de fouille (renard). Une analyse de
 sensibilité paramétrique par dérivée numérique accompagne les résultats principaux.
 
 Chaque vérification est menée en parallèle sur deux chaînes indépendantes — ELU (résistance,

@@ -9,10 +9,11 @@ import { CLAUSES_EC7 } from '../norme/metadataNorme';
  * de rupture est l'arc inférieur y = yc − √(R² − (x − xc)²).
  *
  * Formulation en moments autour du centre :
- *   F = [ Σ (c'_d·b + (W − u·b)·tan φ'_d) / m_α(F) · R  +  Σ T_i·(yc − y_i) ] / M_moteur,d
+ *   F = Σ (c'_d·b + (W − u·b)·tan φ'_d) / m_α(F) · R  /  ( M_moteur,d − Σ T_i·(yc − y_i) )
  *   m_α = cos α · (1 + tan α · tan φ'_d / F)
- * Les renforcements horizontaux (sol renforcé) apportent un moment résistant T_i·(yc − y_i),
- * non divisé par m_α.
+ * F porte sur la seule résistance du sol. Les renforcements horizontaux (sol renforcé),
+ * pris à leur résistance de calcul, réduisent le moment moteur : ils ne sont pas divisés
+ * une seconde fois par F ni par γR;e.
  */
 
 const DEG = Math.PI / 180;
@@ -39,7 +40,7 @@ export interface ZoneMateriau {
 /**
  * Renforcement horizontal (lit d'armatures) à la cote y, de xDebut à xFin.
  * Les résistances sont des valeurs de calcul, par mètre de profil.
- * La partie mobilisée est celle située hors du cercle, du côté opposé au sens du glissement.
+ * La partie mobilisée est celle située hors du cercle, en amont du déplacement de la masse.
  */
 export interface RenforcementHorizontal {
   y: number;
@@ -111,10 +112,12 @@ export type ResultatCercleBishop =
       taux: number; // gamma_Re / F
       conforme: boolean;
       momentMoteur_d: number; // kNm/m
-      momentResistant_d: number; // kNm/m (= F · M_moteur)
+      momentResistant_d: number; // kNm/m, résistance du sol mobilisée (= F · (M_moteur − M_renf))
       momentRenforcements_d: number; // kNm/m
       iterations: number;
-      sens: 1 | -1; // +1 : glissement vers les x croissants
+      // +1 : moment moteur porté par les tranches à x > xc ; la masse tourne en sens horaire
+      // et se déplace vers les x décroissants. −1 : l'inverse.
+      sens: 1 | -1;
       tranches: TrancheBishop[];
       renforcements: RenforcementMobilise[];
       avertissements: string[];
@@ -252,6 +255,14 @@ export function analyserCercleBishop(entree: EntreeBishop): ResultatCercleBishop
   ) {
     return { valide: false, motif: 'Le cercle sort du profil défini (prolonger le profil)' };
   }
+  // L'arc doit ressortir au terrain des deux côtés : si le terrain passe au-dessus du centre
+  // à l'aplomb d'une extrémité du cercle, la masse serait coupée par une verticale fictive.
+  if (
+    (xc - R >= xProfilMin && interpolerProfil(profilTN, xc - R) > yc + 1e-9) ||
+    (xc + R <= xProfilMax && interpolerProfil(profilTN, xc + R) > yc + 1e-9)
+  ) {
+    return { valide: false, motif: "Le cercle ne ressort pas au terrain (centre sous le terrain à l'aplomb d'une extrémité)" };
+  }
   // Affinage des points d'entrée et de sortie par dichotomie
   const affiner = (xDedans: number, xDehors: number) => {
     let a = xDedans;
@@ -343,7 +354,9 @@ export function analyserCercleBishop(entree: EntreeBishop): ResultatCercleBishop
   }
   if (!(moteur > 1e-6)) return { valide: false, motif: 'Moment moteur nul ou négatif' };
 
-  // Renforcements : longueur ancrée hors du cercle, côté opposé au glissement
+  // Renforcements : longueur ancrée hors du cercle, en amont du déplacement. Pour sens = +1
+  // la masse part vers les x décroissants : le lit est tendu vers la gauche et s'ancre à
+  // droite du cercle (au-delà de xd). Pour sens = −1, l'inverse.
   const mobilises: RenforcementMobilise[] = [];
   let momentRenf = 0;
   for (const r of renforcements) {
@@ -355,10 +368,10 @@ export function analyserCercleBishop(entree: EntreeBishop): ResultatCercleBishop
     const a = Math.min(r.xDebut, r.xFin);
     const b = Math.max(r.xDebut, r.xFin);
     // Point où le lit traverse la surface de rupture, côté amont du glissement
-    const xCoupe = sens > 0 ? xg : xd;
+    const xCoupe = sens > 0 ? xd : xg;
     if (xCoupe <= a || xCoupe >= b) continue;
     if (r.y >= interpolerProfil(profilTN, xCoupe)) continue;
-    const longueurAncree = sens > 0 ? xg - a : b - xd;
+    const longueurAncree = sens > 0 ? b - xd : xg - a;
     const T = Math.min(r.resistanceRupture_d, r.arrachementLineique_d * longueurAncree);
     if (T <= 0) continue;
     const bras = yc - r.y;
@@ -378,13 +391,19 @@ export function analyserCercleBishop(entree: EntreeBishop): ResultatCercleBishop
       return { sinPhys, tanPhi, qRetenue, mA, borne: mBrut < 0.2, num };
     });
 
+  // Moment moteur net des renforcements
+  const moteurNet = moteur * R - momentRenf;
+  if (moteurNet <= 1e-9 * moteur * R) {
+    return { valide: false, motif: 'Les renforcements reprennent tout le moment moteur (F non défini, cercle sans risque)' };
+  }
+
   // Itérations de Bishop
   let F = 1.5;
   let iterations = 0;
   let converge = false;
   for (; iterations < 200; iterations++) {
     const somme = termes(F).reduce((s, t) => s + t.num / t.mA, 0);
-    const Fn = (somme * R + momentRenf) / (moteur * R);
+    const Fn = (somme * R) / moteurNet;
     if (Math.abs(Fn - F) < 1e-7) {
       F = Fn;
       converge = true;
@@ -424,7 +443,7 @@ export function analyserCercleBishop(entree: EntreeBishop): ResultatCercleBishop
     taux,
     conforme: taux <= 1 + 1e-9,
     momentMoteur_d: moteur * R,
-    momentResistant_d: F * moteur * R,
+    momentResistant_d: F * moteurNet,
     momentRenforcements_d: momentRenf,
     iterations: iterations + 1,
     sens,
@@ -504,6 +523,8 @@ export interface OptionsRecherche {
   /** Cote sous laquelle les cercles ne descendent pas (substratum). Défaut : base du modèle. */
   coteLimite?: number;
   nbTranches?: number;
+  /** Filtre des cercles admissibles (ex. sortie devant le pied d'un parement). */
+  accepter?: (resultat: Extract<ResultatCercleBishop, { valide: true }>, cercle: CercleRupture) => boolean;
 }
 
 /**
@@ -531,7 +552,9 @@ export function rechercherCercleCritique(
     if (c.rayon <= 0.1 || c.centreY - c.rayon < coteLimite - 1e-9) return null;
     nb++;
     const r = analyserCercleBishop({ ...base, cercle: c, nbTranches });
-    return r.valide ? r : null;
+    if (!r.valide) return null;
+    const v = r as Extract<ResultatCercleBishop, { valide: true }>;
+    return !options.accepter || options.accepter(v, c) ? v : null;
   };
 
   // 1. Grille

@@ -9,7 +9,7 @@ interface CoupeTalusProps {
   couches: CoucheGeotechnique[];
   coteNappe: number;
   surcharges: SurchargeTalus[];
-  cercle: CercleRupture;
+  cercle: CercleRupture | null; // null : pas de cercle à dessiner
   resultat: Valide | null;
   zones?: ZoneMateriau[];
   renforcements?: RenforcementHorizontal[];
@@ -39,9 +39,13 @@ export const CoupeTalus: React.FC<CoupeTalusProps> = ({
   const yHaut = Math.max(...ys);
   const yBasProfil = Math.min(...ys);
   const H = Math.max(yHaut - yBasProfil, (xMax - xMin) / 8, 1);
-  const yBasArc = resultat ? Math.min(...resultat.tranches.map((t) => t.yBase)) : cercle.centreY - cercle.rayon;
+  const yBasArc = resultat
+    ? Math.min(...resultat.tranches.map((t) => t.yBase))
+    : cercle
+      ? cercle.centreY - cercle.rayon
+      : yBasProfil;
   const yMin = Math.min(yBasProfil - 0.4 * H, yBasArc - 0.15 * H);
-  const yMax = Math.max(yHaut + 0.35 * H, Math.min(cercle.centreY + 0.1 * H, yHaut + 3 * H));
+  const yMax = Math.max(yHaut + 0.35 * H, cercle ? Math.min(cercle.centreY + 0.1 * H, yHaut + 3 * H) : yHaut);
 
   const largeur = 900;
   const marge = { g: 46, d: 12, h: 12, b: 22 };
@@ -128,8 +132,10 @@ export const CoupeTalus: React.FC<CoupeTalusProps> = ({
           />
         </g>
       )}
-      <circle cx={X(cercle.centreX)} cy={Y(cercle.centreY)} r={cercle.rayon * echelle} fill="none" stroke="var(--traction)" strokeOpacity={0.3} strokeDasharray="3 4" />
-      {Y(cercle.centreY) > 0 && (
+      {cercle && (
+        <circle cx={X(cercle.centreX)} cy={Y(cercle.centreY)} r={cercle.rayon * echelle} fill="none" stroke="var(--traction)" strokeOpacity={0.3} strokeDasharray="3 4" />
+      )}
+      {cercle && Y(cercle.centreY) > 0 && (
         <g>
           <circle cx={X(cercle.centreX)} cy={Y(cercle.centreY)} r={3} fill="var(--traction)" />
           <text x={X(cercle.centreX) + 6} y={Y(cercle.centreY) - 4} fontSize={10} fill="var(--traction)">

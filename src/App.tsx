@@ -10,6 +10,7 @@ import { OngletRadier } from './components/OngletRadier';
 import { OngletPieux } from './components/OngletPieux';
 import { OngletSoutenement } from './components/OngletSoutenement';
 import { OngletStabilite } from './components/OngletStabilite';
+import { OngletSolRenforce } from './components/OngletSolRenforce';
 import { OngletValidation } from './components/OngletValidation';
 import { ModalNoteDeCalcul } from './components/ModalNoteDeCalcul';
 import { PWAInstallButton } from './components/PWAInstallButton';
@@ -28,9 +29,10 @@ import {
   AlertTriangle,
   Sliders,
   Sparkles,
+  Rows3,
 } from 'lucide-react';
 
-type OngletId = 'sol' | 'contraintes' | 'radier' | 'pieux' | 'soutenement' | 'stabilite' | 'validation';
+type OngletId = 'sol' | 'contraintes' | 'radier' | 'pieux' | 'soutenement' | 'solRenforce' | 'stabilite' | 'validation';
 
 export default function App() {
   const [modele, setModele] = useState<ModeleTerrain>(PROJET_EXEMPLE_EC7);
@@ -262,6 +264,19 @@ export default function App() {
           </button>
 
           <button
+            id="tab-btn-sol-renforce"
+            onClick={() => setOngletActif('solRenforce')}
+            className={`flex items-center gap-2 px-3 py-2 rounded-rayon-petit text-xs font-semibold whitespace-nowrap transition-colors ${
+              ongletActif === 'solRenforce'
+                ? 'bg-surface-appui text-texte border border-bordure'
+                : 'text-texte-doux hover:bg-surface-appui'
+            }`}
+          >
+            <Rows3 className="w-4 h-4" />
+            <span>Module D : Sol renforcé (terre armée)</span>
+          </button>
+
+          <button
             id="tab-btn-stabilite"
             onClick={() => setOngletActif('stabilite')}
             className={`flex items-center gap-2 px-3 py-2 rounded-rayon-petit text-xs font-semibold whitespace-nowrap transition-colors ${
@@ -349,6 +364,10 @@ export default function App() {
 
           {ongletActif === 'soutenement' && (
             <OngletSoutenement modele={modele} onUpdateSoutenement={handleUpdateSoutenement} />
+          )}
+
+          {ongletActif === 'solRenforce' && (
+            <OngletSolRenforce modele={modele} onUpdateModele={handleUpdateModele} />
           )}
 
           {ongletActif === 'stabilite' && (

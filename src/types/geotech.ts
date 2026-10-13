@@ -278,6 +278,63 @@ export interface SurchargeTalus {
   nature: 'G' | 'Q'; // permanente ou variable
 }
 
+// ---------------------------------------------------------------------------
+// Sol renforcé (terre armée, armatures géosynthétiques)
+// ---------------------------------------------------------------------------
+
+export type TypeArmature = 'feuillardAcier' | 'grilleAcier' | 'geosynthetique';
+
+export interface ArmatureSolRenforce {
+  type: TypeArmature;
+  // Acier (feuillards, grilles) : section d'une armature, nombre par mètre de parement et par lit
+  largeur_mm: number;
+  epaisseur_mm: number;
+  fy_MPa: number;
+  nbParMetre: number;
+  perteEpaisseurParFace_mm: TripletGrandeur<number>; // corrosion sur la durée de service
+  // Géosynthétique : résistance par mètre de largeur et facteurs de réduction
+  resistanceUltime_kNm: number;
+  RF_fluage: number;
+  RF_endommagement: number;
+  RF_vieillissement: number;
+  tauxCouverture: number; // Rc, largeur couverte par mètre de parement (m/m)
+}
+
+/** Coefficients de méthode (méthode cohérente gravitaire), modifiables, avec leur source. */
+export interface CoefficientsSolRenforce {
+  K0_sur_Ka: TripletGrandeur<number>; // K/Ka en tête du massif
+  Kz0_sur_Ka: TripletGrandeur<number>; // K/Ka à la profondeur z0 et au-delà
+  z0: TripletGrandeur<number>; // m
+  Fetoile0: TripletGrandeur<number>; // coefficient de frottement apparent en tête
+  FetoileZ0: TripletGrandeur<number>; // à z0 et au-delà (statut 'derive' : recalculé depuis φ')
+  alpha: TripletGrandeur<number>; // coefficient d'échelle (effet de longueur)
+  C: TripletGrandeur<number>; // nombre de faces frottantes (2)
+  gamma_R_rupture: TripletGrandeur<number>;
+  gamma_R_arrachement: TripletGrandeur<number>;
+  ligne: 'bilineaire' | 'rankine'; // ligne des tractions maximales (inextensible / extensible)
+}
+
+/**
+ * Massif en sol renforcé à parement vertical. Le parement est en x = xParement, le massif
+ * s'étend vers les x croissants sur la longueur des armatures, le sol retenu au-delà.
+ */
+export interface OuvrageSolRenforce {
+  id: string;
+  nom: string;
+  xParement: number; // m
+  coteBase: number; // m, base du massif
+  hauteur: number; // m, H
+  encastrement: number; // m, D (terrain devant le parement à coteBase + D)
+  longueurArmatures: number; // m, L
+  remblai: { gamma: number; phiPrime: number }; // remblai renforcé (c' = 0)
+  surchargeG: number; // kPa en tête (massif et sol retenu)
+  surchargeQ: number; // kPa
+  premierLit: number; // m au-dessus de la base
+  espacementSv: number; // m
+  armature: ArmatureSolRenforce;
+  coefficients: CoefficientsSolRenforce;
+}
+
 export interface ModeleTerrain {
   schemaVersion: '1.0';
   projet: {
@@ -298,5 +355,6 @@ export interface ModeleTerrain {
     radiers: OuvrageRadier[];
     pieux: OuvragePieu[];
     soutenements: OuvrageSoutenement[];
+    solsRenforces?: OuvrageSolRenforce[];
   };
 }
